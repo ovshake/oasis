@@ -26,7 +26,7 @@
 [Community](https://github.com/camel-ai/camel#community) |
 [Paper](https://arxiv.org/abs/2411.11581) |
 [Examples](https://github.com/camel-ai/oasis/tree/main/scripts) |
-[Dataset](https://huggingface.co/datasets/oasis-agent/oasis-dataset) |
+[Dataset](https://huggingface.co/datasets/echo-yiyiyi/oasis-dataset) |
 [Citation](https://github.com/camel-ai/oasis#-citation) |
 [Contributing](https://github.com/camel-ai/oasis#-contributing-to-oasis) |
 [CAMEL-AI](https://www.camel-ai.org/)
