@@ -66,7 +66,7 @@ async def main():
                           agent_graph=agent_graph,
                           model=openai_model,
                           available_actions=available_actions,
-                          single_iteration=False)
+                          max_iteration=5)
     agent_graph.add_agent(agent_2)
 
     # Define the path to the database
