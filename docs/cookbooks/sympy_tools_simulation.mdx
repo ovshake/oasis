@@ -63,11 +63,12 @@ async def main():
                           agent_graph=agent_graph,
                           model=openai_model,
                           available_actions=available_actions,
-                          single_iteration=False)
+                          max_iteration=5)
     agent_graph.add_agent(agent_2)
 
     # Define the path to the database
     db_path = "./data/reddit_simulation.db"
+    os.environ["OASIS_DB_PATH"] = os.path.abspath(db_path)
 
     # Delete the old database
     if os.path.exists(db_path):
@@ -90,7 +91,7 @@ async def main():
                 action_args={
                     "content":
                     "I am doing my homework. Can any kind soul help me "
-                    "simplify this expression: "
+                    "simplify this expression using sympy: "
                     "(x**4 - 16)/(x**2 - 4) + sin(x)**2 + cos(x)**2 + "
                     "(x**3 + 6*x**2 + 12*x + 8)/(x + 2)"
                 }),
