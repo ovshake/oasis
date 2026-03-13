@@ -242,11 +242,11 @@ git clone https://github.com/camel-ai/oasis.git
 # Change directory into project directory
 cd oasis
 
-# Activate oasis virtual environment
-poetry shell
-
-# Install oasis from source
+# Install oasis from source (this will create the virtual environment if needed)
 poetry install
+
+# Activate oasis virtual environment
+eval $(poetry env activate)
 
 # The following command installs a pre-commit hook into the local git repo,
 # so every commit gets auto-formatted and linted.
@@ -259,7 +259,10 @@ pre-commit run --all-files
 pytest test
 
 # Exit the virtual environment
-exit
+deactivate
+
+# Alternative: You can also use 'poetry run' prefix without activating the environment
+# poetry run pytest test
 ```
 
 These commands will install all the necessary dependencies for running the package, examples, linting, formatting, tests, and coverage.
