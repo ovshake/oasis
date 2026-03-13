@@ -94,7 +94,7 @@ async def main():
                 action_args={
                     "content":
                     "I am doing my homework. Can any kind soul help me "
-                    "simplify this expression: "
+                    "simplify this expression using sympy: "
                     "(x**4 - 16)/(x**2 - 4) + sin(x)**2 + cos(x)**2 + "
                     "(x**3 + 6*x**2 + 12*x + 8)/(x + 2)"
                 }),
