@@ -547,12 +547,19 @@ def connect_platform_channel(
 async def generate_custom_agents(
     channel: Channel,
     agent_graph: AgentGraph | None = None,
+    market_enabled: bool = False,
 ) -> AgentGraph:
     if agent_graph is None:
         agent_graph = AgentGraph()
 
     agent_graph = connect_platform_channel(channel=channel,
                                            agent_graph=agent_graph)
+
+    # Enable market on each agent's environment and user_info if configured
+    if market_enabled:
+        for _, agent in agent_graph.get_agents():
+            agent.env.market_enabled = True
+            agent.user_info.market_enabled = True
 
     sign_up_tasks = [
         agent.env.action.sign_up(user_name=agent.user_info.user_name,

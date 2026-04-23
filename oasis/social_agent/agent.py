@@ -67,11 +67,13 @@ class SocialAgent(ChatAgent):
                  available_actions: list[ActionType] = None,
                  tools: Optional[List[Union[FunctionTool, Callable]]] = None,
                  max_iteration: int = 1,
-                 interview_record: bool = False):
+                 interview_record: bool = False,
+                 market_enabled: bool = False):
         self.social_agent_id = agent_id
         self.user_info = user_info
         self.channel = channel or Channel()
-        self.env = SocialEnvironment(SocialAction(agent_id, self.channel))
+        self.env = SocialEnvironment(SocialAction(agent_id, self.channel),
+                                     market_enabled=market_enabled)
         if user_info_template is None:
             system_message_content = self.user_info.to_system_message()
         else:

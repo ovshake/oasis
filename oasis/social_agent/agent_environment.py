@@ -48,12 +48,16 @@ class SocialEnvironment(Environment):
         "are already in")
     env_template = Template(
         "$groups_env\n"
+        "$market_env\n"
         "$posts_env\npick one you want to perform action that best "
         "reflects your current inclination based on your profile and "
-        "posts content. Do not limit your action in just `like` to like posts")
+        "posts content. Do not limit your action in just `like` to like "
+        "posts. You can also trade stocks based on the news and "
+        "discussions you see.")
 
-    def __init__(self, action: SocialAction):
+    def __init__(self, action: SocialAction, market_enabled: bool = False):
         self.action = action
+        self.market_enabled = market_enabled
 
     async def get_posts_env(self) -> str:
         posts = await self.action.refresh()
@@ -100,6 +104,44 @@ class SocialEnvironment(Environment):
         return self.follows_env_template.substitute(
             {"num_follows": num_followings})
 
+    async def get_market_env(self) -> str:
+        if not self.market_enabled:
+            return ""
+        try:
+            portfolio = await self.action.check_portfolio()
+            summary = await self.action.view_market_summary()
+            if not portfolio.get("success") or not summary.get("success"):
+                return ""
+
+            lines = ["=== STOCK MARKET ==="]
+            cash = portfolio.get("cash", 0)
+            total = portfolio.get("total_value", 0)
+            lines.append(
+                f"Your Portfolio: Cash ${cash:,.2f} | "
+                f"Total Value: ${total:,.2f}")
+
+            holdings = portfolio.get("holdings", [])
+            if holdings:
+                h_parts = [f"{h['ticker']}({h['shares']} @ ${h['price']:.2f})"
+                           for h in holdings[:8]]
+                lines.append("Holdings: " + ", ".join(h_parts))
+
+            companies = summary.get("companies", [])
+            if companies:
+                lines.append("Market Overview:")
+                m_parts = [
+                    f"{c['ticker']} ${c['last_price']:.2f} "
+                    f"({'+' if c['change_pct'] >= 0 else ''}"
+                    f"{c['change_pct']:.1f}%)"
+                    for c in companies]
+                lines.append(" | ".join(m_parts))
+            lines.append(
+                "Use view_order_book(ticker) for detailed bid/ask data.")
+            lines.append("=== END MARKET ===")
+            return "\n".join(lines)
+        except Exception:
+            return ""
+
     async def get_group_env(self) -> str:
         groups = await self.action.listen_from_group()
         if groups["success"]:
@@ -126,10 +168,12 @@ class SocialEnvironment(Environment):
         follows_env = (await self.get_follows_env()
                        if include_followers else "No follows.")
         posts_env = await self.get_posts_env() if include_posts else ""
+        market_env = await self.get_market_env()
 
         return self.env_template.substitute(
             followers_env=followers_env,
             follows_env=follows_env,
             posts_env=posts_env,
             groups_env=await self.get_group_env(),
+            market_env=market_env,
         )

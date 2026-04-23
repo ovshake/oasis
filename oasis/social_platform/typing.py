@@ -47,6 +47,11 @@ class ActionType(Enum):
     SEND_TO_GROUP = "send_to_group"
     CREATE_GROUP = "create_group"
     LISTEN_FROM_GROUP = "listen_from_group"
+    PLACE_ORDER = "place_order"
+    CANCEL_ORDER = "cancel_order"
+    CHECK_PORTFOLIO = "check_portfolio"
+    VIEW_ORDER_BOOK = "view_order_book"
+    VIEW_MARKET_SUMMARY = "view_market_summary"
 
     @classmethod
     def get_default_twitter_actions(cls):
@@ -57,6 +62,16 @@ class ActionType(Enum):
             cls.FOLLOW,
             cls.DO_NOTHING,
             cls.QUOTE_POST,
+        ]
+
+    @classmethod
+    def get_default_market_actions(cls):
+        """Market actions to add alongside social actions."""
+        return [
+            cls.PLACE_ORDER,
+            cls.CANCEL_ORDER,
+            cls.CHECK_PORTFOLIO,
+            cls.VIEW_ORDER_BOOK,
         ]
 
     @classmethod

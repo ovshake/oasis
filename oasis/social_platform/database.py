@@ -38,6 +38,11 @@ PRODUCT_SCHEMA_SQL = "product.sql"
 GROUP_SCHEMA_SQL = "chat_group.sql"
 GROUP_MEMBER_SCHEMA_SQL = "group_member.sql"
 GROUP_MESSAGE_SCHEMA_SQL = "group_message.sql"
+COMPANY_SCHEMA_SQL = "company.sql"
+WALLET_SCHEMA_SQL = "wallet.sql"
+PORTFOLIO_SCHEMA_SQL = "portfolio.sql"
+STOCK_ORDER_SCHEMA_SQL = "stock_order.sql"
+TRADE_SCHEMA_SQL = "trade.sql"
 
 TABLE_NAMES = {
     "user",
@@ -56,6 +61,11 @@ TABLE_NAMES = {
     "group",
     "group_member",
     "group_message",
+    "company",
+    "wallet",
+    "portfolio",
+    "stock_order",
+    "trade",
 }
 
 
@@ -191,6 +201,36 @@ def create_db(db_path: str | None = None):
         with open(group_message_sql_path, "r") as sql_file:
             group_message_sql_script = sql_file.read()
         cursor.executescript(group_message_sql_script)
+
+        # Read and execute the company table SQL script:
+        company_sql_path = osp.join(schema_dir, COMPANY_SCHEMA_SQL)
+        with open(company_sql_path, "r") as sql_file:
+            company_sql_script = sql_file.read()
+        cursor.executescript(company_sql_script)
+
+        # Read and execute the wallet table SQL script:
+        wallet_sql_path = osp.join(schema_dir, WALLET_SCHEMA_SQL)
+        with open(wallet_sql_path, "r") as sql_file:
+            wallet_sql_script = sql_file.read()
+        cursor.executescript(wallet_sql_script)
+
+        # Read and execute the portfolio table SQL script:
+        portfolio_sql_path = osp.join(schema_dir, PORTFOLIO_SCHEMA_SQL)
+        with open(portfolio_sql_path, "r") as sql_file:
+            portfolio_sql_script = sql_file.read()
+        cursor.executescript(portfolio_sql_script)
+
+        # Read and execute the stock_order table SQL script:
+        stock_order_sql_path = osp.join(schema_dir, STOCK_ORDER_SCHEMA_SQL)
+        with open(stock_order_sql_path, "r") as sql_file:
+            stock_order_sql_script = sql_file.read()
+        cursor.executescript(stock_order_sql_script)
+
+        # Read and execute the trade table SQL script:
+        trade_sql_path = osp.join(schema_dir, TRADE_SCHEMA_SQL)
+        with open(trade_sql_path, "r") as sql_file:
+            trade_sql_script = sql_file.read()
+        cursor.executescript(trade_sql_script)
 
         # Commit the changes:
         conn.commit()

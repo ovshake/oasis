@@ -1,0 +1,122 @@
+[
+    {
+        "ticker": "NVDA",
+        "name": "Nova Digital",
+        "sector": "Technology",
+        "description": "Leading AI chip manufacturer and GPU designer powering data centers, gaming, and autonomous vehicles worldwide.",
+        "initial_price": 450.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "MSFT",
+        "name": "MegaSoft Systems",
+        "sector": "Technology",
+        "description": "Enterprise software and cloud computing giant serving businesses and consumers globally.",
+        "initial_price": 380.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "XOM",
+        "name": "Xenon Oil & Gas",
+        "sector": "Energy",
+        "description": "Major integrated oil and gas company with upstream exploration, refining, and retail operations across 50+ countries.",
+        "initial_price": 95.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "CVX",
+        "name": "ChevronX Energy",
+        "sector": "Energy",
+        "description": "Global energy corporation focused on oil production, natural gas, and renewable energy investments.",
+        "initial_price": 105.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "REM",
+        "name": "Rare Earth Metals Corp",
+        "sector": "Materials",
+        "description": "Mining and refining rare earth elements critical for electronics, EVs, and defense systems.",
+        "initial_price": 120.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "UAL",
+        "name": "Universal Air Lines",
+        "sector": "Transportation",
+        "description": "Major passenger and cargo airline operating domestic and international routes with a fleet of 800+ aircraft.",
+        "initial_price": 55.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "MRK",
+        "name": "MedReach Health",
+        "sector": "Healthcare",
+        "description": "Pharmaceutical and biotech company developing vaccines, oncology treatments, and hospital supplies.",
+        "initial_price": 110.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "JPF",
+        "name": "JP Financial",
+        "sector": "Financials",
+        "description": "Global banking and financial services firm offering investment banking, asset management, and consumer banking.",
+        "initial_price": 170.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "PGC",
+        "name": "ProGoods Consumer",
+        "sector": "Consumer Staples",
+        "description": "Consumer packaged goods conglomerate producing household essentials, personal care, and food products.",
+        "initial_price": 85.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "AMZ",
+        "name": "AlphaZone Retail",
+        "sector": "Consumer Discretionary",
+        "description": "E-commerce and cloud computing giant with global logistics, streaming media, and AI services.",
+        "initial_price": 180.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "TLX",
+        "name": "TelexComm",
+        "sector": "Communication Services",
+        "description": "Telecommunications and media conglomerate providing wireless, broadband, and digital entertainment services.",
+        "initial_price": 65.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "GRD",
+        "name": "GreenGrid Utilities",
+        "sector": "Utilities",
+        "description": "Electric and renewable energy utility operating solar farms, wind parks, and power distribution networks.",
+        "initial_price": 40.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "DFN",
+        "name": "DefenseNet Systems",
+        "sector": "Industrials",
+        "description": "Defense contractor and aerospace manufacturer producing missile systems, drones, and military communications.",
+        "initial_price": 200.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "CRE",
+        "name": "CrestView Properties",
+        "sector": "Real Estate",
+        "description": "Commercial and residential REIT managing office towers, shopping centers, and apartment complexes.",
+        "initial_price": 75.00,
+        "total_shares": 1000
+    },
+    {
+        "ticker": "AUG",
+        "name": "Aurum Gold Mining",
+        "sector": "Materials",
+        "description": "Precious metals mining company with gold and silver operations across North and South America.",
+        "initial_price": 130.00,
+        "total_shares": 1000
+    }
+]

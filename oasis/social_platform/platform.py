@@ -66,6 +66,8 @@ class Platform:
         max_rec_post_len: int = 2,
         following_post_count=3,
         use_openai_embedding: bool = False,
+        market_news_threshold: float = 0.05,
+        market_news_agent_id: int | None = None,
     ):
         self.db_path = db_path
         self.recsys_type = recsys_type
@@ -124,6 +126,12 @@ class Platform:
             self.recsys_type,
             self.report_threshold,
         )
+
+        # Stock market configuration
+        self.market_news_threshold = market_news_threshold
+        self.market_news_agent_id = market_news_agent_id
+        # Track which companies have already triggered a news post this step
+        self._market_news_posted: set[int] = set()
 
     async def running(self):
         while True:
@@ -1640,3 +1648,443 @@ class Platform:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    # ==================== Stock Market Methods ====================
+
+    async def register_company(self, company_data: dict):
+        """Register a company on the exchange. Called during setup."""
+        try:
+            query = (
+                "INSERT INTO company (company_id, ticker, name, sector, "
+                "description, total_shares, initial_price, last_price, "
+                "prev_close_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            self.pl_utils._execute_db_command(
+                query,
+                (company_data["company_id"], company_data["ticker"],
+                 company_data["name"], company_data.get("sector"),
+                 company_data.get("description"),
+                 company_data["total_shares"], company_data["initial_price"],
+                 company_data["initial_price"],
+                 company_data["initial_price"]),
+                commit=True)
+            return {"success": True, "company_id": company_data["company_id"]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def initialize_market(self, agent_ids: list[int],
+                                companies: list[dict],
+                                initial_cash: float):
+        """Initialize wallets and portfolios for all agents."""
+        try:
+            num_agents = len(agent_ids)
+            # Create wallets
+            for agent_id in agent_ids:
+                self.pl_utils._execute_db_command(
+                    "INSERT INTO wallet (user_id, cash) VALUES (?, ?)",
+                    (agent_id, initial_cash))
+
+            # Distribute shares equally
+            for company in companies:
+                cid = company["company_id"]
+                total = company["total_shares"]
+                base_shares = total // num_agents
+                remainder = total % num_agents
+                for i, agent_id in enumerate(agent_ids):
+                    shares = base_shares + (1 if i < remainder else 0)
+                    self.pl_utils._execute_db_command(
+                        "INSERT INTO portfolio (user_id, company_id, shares) "
+                        "VALUES (?, ?, ?)", (agent_id, cid, shares))
+            self.db.commit()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _get_current_time(self):
+        """Helper to get current simulation time."""
+        if self.recsys_type == RecsysType.REDDIT:
+            return self.sandbox_clock.time_transfer(
+                datetime.now(), self.start_time)
+        else:
+            return self.sandbox_clock.get_time_step()
+
+    def _get_company_by_ticker(self, ticker: str):
+        """Lookup company by ticker. Returns row or None."""
+        self.pl_utils._execute_db_command(
+            "SELECT company_id, ticker, name, sector, total_shares, "
+            "initial_price, last_price, prev_close_price "
+            "FROM company WHERE ticker = ?", (ticker,))
+        return self.db_cursor.fetchone()
+
+    async def place_order(self, agent_id, order_message):
+        ticker, side, price, quantity = order_message
+        current_time = self._get_current_time()
+        try:
+            user_id = agent_id
+            price = float(price)
+            quantity = int(quantity)
+
+            if side not in ("buy", "sell"):
+                return {"success": False, "error": "Side must be 'buy' or "
+                        "'sell'."}
+            if price <= 0 or quantity <= 0:
+                return {"success": False, "error": "Price and quantity must "
+                        "be positive."}
+
+            company = self._get_company_by_ticker(ticker)
+            if not company:
+                return {"success": False,
+                        "error": f"Unknown ticker: {ticker}"}
+            company_id = company[0]
+
+            if side == "buy":
+                # Check cash and escrow
+                self.pl_utils._execute_db_command(
+                    "SELECT cash FROM wallet WHERE user_id = ?", (user_id,))
+                wallet = self.db_cursor.fetchone()
+                if not wallet:
+                    return {"success": False, "error": "No wallet found."}
+                cost = price * quantity
+                if wallet[0] < cost:
+                    return {"success": False,
+                            "error": f"Insufficient cash. Have ${wallet[0]:.2f}"
+                            f", need ${cost:.2f}."}
+                # Deduct cash (escrow)
+                self.pl_utils._execute_db_command(
+                    "UPDATE wallet SET cash = cash - ? WHERE user_id = ?",
+                    (cost, user_id), commit=True)
+            else:
+                # Check shares and escrow
+                self.pl_utils._execute_db_command(
+                    "SELECT shares FROM portfolio WHERE user_id = ? "
+                    "AND company_id = ?", (user_id, company_id))
+                holding = self.db_cursor.fetchone()
+                if not holding or holding[0] < quantity:
+                    avail = holding[0] if holding else 0
+                    return {"success": False,
+                            "error": f"Insufficient shares. Have {avail}, "
+                            f"need {quantity}."}
+                # Deduct shares (escrow)
+                self.pl_utils._execute_db_command(
+                    "UPDATE portfolio SET shares = shares - ? "
+                    "WHERE user_id = ? AND company_id = ?",
+                    (quantity, user_id, company_id), commit=True)
+
+            # Insert order
+            self.pl_utils._execute_db_command(
+                "INSERT INTO stock_order (user_id, company_id, side, price, "
+                "quantity, filled_quantity, status, created_at) "
+                "VALUES (?, ?, ?, ?, ?, 0, 'open', ?)",
+                (user_id, company_id, side, price, quantity, current_time),
+                commit=True)
+            order_id = self.db_cursor.lastrowid
+
+            # Match orders
+            trades = self._match_orders(company_id, current_time)
+
+            # Check for market news
+            self._check_market_news(company_id, current_time)
+
+            # Record trace
+            action_info = {
+                "ticker": ticker, "side": side, "price": price,
+                "quantity": quantity, "order_id": order_id,
+                "trades": trades
+            }
+            self.pl_utils._record_trace(user_id, ActionType.PLACE_ORDER.value,
+                                        action_info, current_time)
+
+            return {"success": True, "order_id": order_id, "trades": trades}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _match_orders(self, company_id: int, current_time) -> list[dict]:
+        """Continuous order matching for a company. Returns list of trades."""
+        trades = []
+        while True:
+            # Find best buy (highest price, earliest time)
+            self.pl_utils._execute_db_command(
+                "SELECT order_id, user_id, price, quantity, filled_quantity "
+                "FROM stock_order WHERE company_id = ? AND side = 'buy' "
+                "AND status = 'open' ORDER BY price DESC, created_at ASC "
+                "LIMIT 1", (company_id,))
+            best_buy = self.db_cursor.fetchone()
+
+            # Find best sell (lowest price, earliest time)
+            self.pl_utils._execute_db_command(
+                "SELECT order_id, user_id, price, quantity, filled_quantity "
+                "FROM stock_order WHERE company_id = ? AND side = 'sell' "
+                "AND status = 'open' ORDER BY price ASC, created_at ASC "
+                "LIMIT 1", (company_id,))
+            best_sell = self.db_cursor.fetchone()
+
+            if not best_buy or not best_sell:
+                break
+            if best_buy[2] < best_sell[2]:
+                # No crossing — best bid below best ask
+                break
+
+            buy_id, buyer_id, buy_price, buy_qty, buy_filled = best_buy
+            sell_id, seller_id, sell_price, sell_qty, sell_filled = best_sell
+
+            # Trade at resting order (maker) price — the older order
+            # Since we pick best on each side, use the sell (ask) price
+            # for a buy-initiated cross, or buy (bid) for sell-initiated.
+            # Standard: trade at the price of the order that was there first.
+            trade_price = sell_price  # maker price
+
+            buy_remaining = buy_qty - buy_filled
+            sell_remaining = sell_qty - sell_filled
+            trade_qty = min(buy_remaining, sell_remaining)
+
+            # Insert trade record
+            self.pl_utils._execute_db_command(
+                "INSERT INTO trade (buy_order_id, sell_order_id, company_id, "
+                "price, quantity, buyer_id, seller_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (buy_id, sell_id, company_id, trade_price, trade_qty,
+                 buyer_id, seller_id, current_time), commit=True)
+
+            # Update filled quantities
+            new_buy_filled = buy_filled + trade_qty
+            new_sell_filled = sell_filled + trade_qty
+            buy_status = "filled" if new_buy_filled >= buy_qty else "open"
+            sell_status = "filled" if new_sell_filled >= sell_qty else "open"
+
+            self.pl_utils._execute_db_command(
+                "UPDATE stock_order SET filled_quantity = ?, status = ? "
+                "WHERE order_id = ?",
+                (new_buy_filled, buy_status, buy_id), commit=True)
+            self.pl_utils._execute_db_command(
+                "UPDATE stock_order SET filled_quantity = ?, status = ? "
+                "WHERE order_id = ?",
+                (new_sell_filled, sell_status, sell_id), commit=True)
+
+            # Cash settlement: buyer escrowed at buy_price, trade at
+            # trade_price. Refund difference if trade_price < buy_price.
+            refund = (buy_price - trade_price) * trade_qty
+            if refund > 0:
+                self.pl_utils._execute_db_command(
+                    "UPDATE wallet SET cash = cash + ? WHERE user_id = ?",
+                    (refund, buyer_id), commit=True)
+
+            # Credit seller
+            self.pl_utils._execute_db_command(
+                "UPDATE wallet SET cash = cash + ? WHERE user_id = ?",
+                (trade_price * trade_qty, seller_id), commit=True)
+
+            # Transfer shares to buyer
+            self.pl_utils._execute_db_command(
+                "SELECT shares FROM portfolio WHERE user_id = ? "
+                "AND company_id = ?", (buyer_id, company_id))
+            existing = self.db_cursor.fetchone()
+            if existing:
+                self.pl_utils._execute_db_command(
+                    "UPDATE portfolio SET shares = shares + ? "
+                    "WHERE user_id = ? AND company_id = ?",
+                    (trade_qty, buyer_id, company_id), commit=True)
+            else:
+                self.pl_utils._execute_db_command(
+                    "INSERT INTO portfolio (user_id, company_id, shares) "
+                    "VALUES (?, ?, ?)",
+                    (buyer_id, company_id, trade_qty), commit=True)
+
+            # Update last price
+            self.pl_utils._execute_db_command(
+                "UPDATE company SET last_price = ? WHERE company_id = ?",
+                (trade_price, company_id), commit=True)
+
+            trades.append({
+                "trade_price": trade_price, "quantity": trade_qty,
+                "buyer_id": buyer_id, "seller_id": seller_id
+            })
+
+        return trades
+
+    def _check_market_news(self, company_id: int, current_time):
+        """Auto-post market news if price moved beyond threshold."""
+        if self.market_news_agent_id is None:
+            return
+        if company_id in self._market_news_posted:
+            return
+
+        self.pl_utils._execute_db_command(
+            "SELECT ticker, name, sector, last_price, prev_close_price "
+            "FROM company WHERE company_id = ?", (company_id,))
+        row = self.db_cursor.fetchone()
+        if not row or not row[3] or not row[4] or row[4] == 0:
+            return
+
+        ticker, name, sector, last_price, prev_close = row
+        change_pct = (last_price - prev_close) / prev_close
+        if abs(change_pct) >= self.market_news_threshold:
+            direction = "UP" if change_pct > 0 else "DOWN"
+            content = (
+                f"MARKET UPDATE: {ticker} ({name}) is {direction} "
+                f"{abs(change_pct)*100:.1f}% to ${last_price:.2f}. "
+                f"Sector: {sector}."
+            )
+            self.pl_utils._execute_db_command(
+                "INSERT INTO post (user_id, content, created_at, num_likes, "
+                "num_dislikes, num_shares) VALUES (?, ?, ?, 0, 0, 0)",
+                (self.market_news_agent_id, content, current_time),
+                commit=True)
+            self._market_news_posted.add(company_id)
+
+    async def cancel_order(self, agent_id, order_id):
+        current_time = self._get_current_time()
+        try:
+            user_id = agent_id
+            order_id = int(order_id)
+            self.pl_utils._execute_db_command(
+                "SELECT user_id, company_id, side, price, quantity, "
+                "filled_quantity, status FROM stock_order "
+                "WHERE order_id = ?", (order_id,))
+            order = self.db_cursor.fetchone()
+            if not order:
+                return {"success": False, "error": "Order not found."}
+            if order[0] != user_id:
+                return {"success": False,
+                        "error": "Order does not belong to you."}
+            if order[6] != "open":
+                return {"success": False,
+                        "error": f"Order is already {order[6]}."}
+
+            owner_id, company_id, side, price, qty, filled_qty, _ = order
+            unfilled = qty - filled_qty
+
+            # Mark cancelled
+            self.pl_utils._execute_db_command(
+                "UPDATE stock_order SET status = 'cancelled' "
+                "WHERE order_id = ?", (order_id,), commit=True)
+
+            # Refund escrowed resources
+            if side == "buy":
+                refund = price * unfilled
+                self.pl_utils._execute_db_command(
+                    "UPDATE wallet SET cash = cash + ? WHERE user_id = ?",
+                    (refund, user_id), commit=True)
+            else:
+                self.pl_utils._execute_db_command(
+                    "UPDATE portfolio SET shares = shares + ? "
+                    "WHERE user_id = ? AND company_id = ?",
+                    (unfilled, user_id, company_id), commit=True)
+
+            action_info = {"order_id": order_id, "side": side,
+                           "refunded_qty": unfilled}
+            self.pl_utils._record_trace(user_id,
+                                        ActionType.CANCEL_ORDER.value,
+                                        action_info, current_time)
+            return {"success": True, "order_id": order_id}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def check_portfolio(self, agent_id):
+        try:
+            user_id = agent_id
+            # Get cash
+            self.pl_utils._execute_db_command(
+                "SELECT cash FROM wallet WHERE user_id = ?", (user_id,))
+            wallet = self.db_cursor.fetchone()
+            cash = wallet[0] if wallet else 0.0
+
+            # Get holdings with company info
+            self.pl_utils._execute_db_command(
+                "SELECT c.ticker, c.name, c.sector, p.shares, "
+                "COALESCE(c.last_price, c.initial_price) as price "
+                "FROM portfolio p JOIN company c "
+                "ON p.company_id = c.company_id "
+                "WHERE p.user_id = ? AND p.shares > 0 "
+                "ORDER BY (p.shares * COALESCE(c.last_price, "
+                "c.initial_price)) DESC",
+                (user_id,))
+            rows = self.db_cursor.fetchall()
+            holdings = []
+            holdings_value = 0.0
+            for row in rows:
+                value = row[3] * row[4]
+                holdings_value += value
+                holdings.append({
+                    "ticker": row[0], "name": row[1], "sector": row[2],
+                    "shares": row[3], "price": row[4],
+                    "value": round(value, 2)
+                })
+
+            total_value = round(cash + holdings_value, 2)
+            return {
+                "success": True, "cash": round(cash, 2),
+                "holdings": holdings, "total_value": total_value
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def view_order_book(self, agent_id, ticker):
+        try:
+            company = self._get_company_by_ticker(ticker)
+            if not company:
+                return {"success": False,
+                        "error": f"Unknown ticker: {ticker}"}
+            company_id = company[0]
+            last_price = company[6] if company[6] else company[5]
+
+            # Top 5 bid levels (grouped by price)
+            self.pl_utils._execute_db_command(
+                "SELECT price, SUM(quantity - filled_quantity) as vol "
+                "FROM stock_order WHERE company_id = ? AND side = 'buy' "
+                "AND status = 'open' GROUP BY price "
+                "ORDER BY price DESC LIMIT 5", (company_id,))
+            bids = [{"price": r[0], "quantity": r[1]}
+                    for r in self.db_cursor.fetchall()]
+
+            # Top 5 ask levels (grouped by price)
+            self.pl_utils._execute_db_command(
+                "SELECT price, SUM(quantity - filled_quantity) as vol "
+                "FROM stock_order WHERE company_id = ? AND side = 'sell' "
+                "AND status = 'open' GROUP BY price "
+                "ORDER BY price ASC LIMIT 5", (company_id,))
+            asks = [{"price": r[0], "quantity": r[1]}
+                    for r in self.db_cursor.fetchall()]
+
+            # Total volume traded
+            self.pl_utils._execute_db_command(
+                "SELECT COALESCE(SUM(quantity), 0) FROM trade "
+                "WHERE company_id = ?", (company_id,))
+            volume = self.db_cursor.fetchone()[0]
+
+            return {
+                "success": True, "ticker": ticker,
+                "last_price": last_price, "bids": bids,
+                "asks": asks, "volume": volume
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def view_market_summary(self, agent_id):
+        try:
+            self.pl_utils._execute_db_command(
+                "SELECT ticker, name, sector, "
+                "COALESCE(last_price, initial_price) as price, "
+                "COALESCE(prev_close_price, initial_price) as prev "
+                "FROM company ORDER BY ticker")
+            rows = self.db_cursor.fetchall()
+            companies = []
+            for row in rows:
+                price, prev = row[3], row[4]
+                change_pct = ((price - prev) / prev * 100) if prev else 0.0
+                companies.append({
+                    "ticker": row[0], "name": row[1], "sector": row[2],
+                    "last_price": round(price, 2),
+                    "change_pct": round(change_pct, 2)
+                })
+            return {"success": True, "companies": companies}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def update_market_prices(self):
+        """Snapshot prev_close = last_price at start of each step."""
+        try:
+            self.pl_utils._execute_db_command(
+                "UPDATE company SET prev_close_price = "
+                "COALESCE(last_price, initial_price)", commit=True)
+            self._market_news_posted.clear()
+        except Exception as e:
+            twitter_log.error(f"Failed to update market prices: {e}")

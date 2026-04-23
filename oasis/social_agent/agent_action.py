@@ -57,6 +57,11 @@ class SocialAction:
                 self.send_to_group,
                 self.create_group,
                 self.listen_from_group,
+                self.place_order,
+                self.cancel_order,
+                self.check_portfolio,
+                self.view_order_book,
+                self.view_market_summary,
             ]
         ]
 
@@ -756,3 +761,96 @@ class SocialAction:
         r"""Listen messages from groups"""
         return await self.perform_action(self.agent_id,
                                          ActionType.LISTEN_FROM_GROUP.value)
+
+    async def place_order(self, ticker: str, side: str, price: float,
+                          quantity: int):
+        r"""Place a limit order to buy or sell stock on the exchange.
+
+        Args:
+            ticker (str): The stock ticker symbol (e.g., "NVDA", "XOM").
+            side (str): Order side, must be "buy" or "sell".
+            price (float): The limit price per share.
+            quantity (int): The number of shares to buy or sell.
+
+        Returns:
+            dict: A dictionary with 'success' indicating if the order was
+                placed, 'order_id' the ID of the new order, and optionally
+                'trades' listing any immediate fills.
+
+            Example of a successful return:
+            {"success": True, "order_id": 1, "trades": []}
+        """
+        order_message = (ticker, side, float(price), int(quantity))
+        return await self.perform_action(order_message,
+                                         ActionType.PLACE_ORDER.value)
+
+    async def cancel_order(self, order_id: int):
+        r"""Cancel an open stock order.
+
+        Args:
+            order_id (int): The ID of the order to cancel.
+
+        Returns:
+            dict: A dictionary with 'success' indicating if the cancellation
+                was successful.
+
+            Example of a successful return:
+            {"success": True, "order_id": 1}
+        """
+        return await self.perform_action(int(order_id),
+                                         ActionType.CANCEL_ORDER.value)
+
+    async def check_portfolio(self):
+        r"""Check your stock portfolio including cash balance, stock holdings,
+        and total portfolio value.
+
+        Returns:
+            dict: A dictionary with 'success', 'cash' balance, 'holdings'
+                list of stocks owned with current values, and
+                'total_value' of the entire portfolio.
+
+            Example of a successful return:
+            {"success": True, "cash": 100000.0, "holdings": [...],
+             "total_value": 150000.0}
+        """
+        return await self.perform_action(None,
+                                         ActionType.CHECK_PORTFOLIO.value)
+
+    async def view_order_book(self, ticker: str):
+        r"""View the order book for a specific stock showing top 5 bid and
+        ask prices with their volumes, plus the last traded price.
+
+        Args:
+            ticker (str): The stock ticker symbol (e.g., "NVDA", "XOM").
+
+        Returns:
+            dict: A dictionary with 'success', 'ticker', 'last_price',
+                'bids' (top 5 buy orders by price descending),
+                'asks' (top 5 sell orders by price ascending),
+                and 'volume' (total shares traded).
+
+            Example of a successful return:
+            {"success": True, "ticker": "NVDA", "last_price": 450.0,
+             "bids": [{"price": 449.0, "quantity": 10}, ...],
+             "asks": [{"price": 451.0, "quantity": 5}, ...],
+             "volume": 150}
+        """
+        return await self.perform_action(ticker,
+                                         ActionType.VIEW_ORDER_BOOK.value)
+
+    async def view_market_summary(self):
+        r"""View a summary of all stocks on the exchange including ticker,
+        company name, sector, last traded price, and percentage change.
+
+        Returns:
+            dict: A dictionary with 'success' and 'companies' list containing
+                each company's market data.
+
+            Example of a successful return:
+            {"success": True, "companies": [
+                {"ticker": "NVDA", "name": "Nova Digital",
+                 "sector": "Technology", "last_price": 455.0,
+                 "change_pct": 1.11}, ...]}
+        """
+        return await self.perform_action(None,
+                                         ActionType.VIEW_MARKET_SUMMARY.value)

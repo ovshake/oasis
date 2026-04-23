@@ -53,6 +53,7 @@ class OasisEnv:
         platform: Union[DefaultPlatformType, Platform],
         database_path: str = None,
         semaphore: int = 128,
+        market_config: dict | None = None,
     ) -> None:
         r"""Init the oasis environment.
 
@@ -63,9 +64,13 @@ class OasisEnv:
                 Or you can pass a custom `Platform` instance.
             database_path: The path to create a sqlite3 database. The file
                 extension must be `.db` such as `twitter_simulation.db`.
+            market_config: Optional dict with keys 'companies' (list of
+                company dicts) and 'initial_cash' (float). Enables the
+                stock market extension.
         """
         # Initialize the agent graph
         self.agent_graph = agent_graph
+        self.market_config = market_config
         # Use a semaphore to limit the number of concurrent requests
         self.llm_semaphore = asyncio.Semaphore(semaphore)
         if isinstance(platform, DefaultPlatformType):
@@ -119,7 +124,35 @@ class OasisEnv:
         r"""Start the platform and sign up the agents."""
         self.platform_task = asyncio.create_task(self.platform.running())
         self.agent_graph = await generate_custom_agents(
-            channel=self.channel, agent_graph=self.agent_graph)
+            channel=self.channel, agent_graph=self.agent_graph,
+            market_enabled=self.market_config is not None)
+
+        # Initialize stock market if configured
+        if self.market_config is not None:
+            companies = self.market_config.get("companies", [])
+            initial_cash = self.market_config.get("initial_cash", 100000.0)
+
+            # Assign company_ids if not present
+            for i, c in enumerate(companies):
+                if "company_id" not in c:
+                    c["company_id"] = i + 1
+
+            # Register companies
+            for company_data in companies:
+                await self.platform.register_company(company_data)
+
+            # Get all agent user_ids (signed up agents)
+            agent_ids = list(self.agent_graph.agent_mappings.keys())
+            await self.platform.initialize_market(
+                agent_ids, companies, initial_cash)
+
+            # Set market news agent (use first agent or a dedicated one)
+            if self.platform.market_news_agent_id is None:
+                self.platform.market_news_agent_id = agent_ids[0] \
+                    if agent_ids else None
+            env_log.info(
+                f"Market initialized: {len(companies)} companies, "
+                f"{len(agent_ids)} agents, ${initial_cash} initial cash.")
 
     async def _perform_llm_action(self, agent):
         r"""Send the request to the llm model and execute the action.
@@ -148,6 +181,10 @@ class OasisEnv:
         Returns:
             None
         """
+        # Update market prices (snapshot prev_close) before the step
+        if self.market_config is not None:
+            await self.platform.update_market_prices()
+
         # Update the recommendation system
         await self.platform.update_rec_table()
         env_log.info("update rec table.")

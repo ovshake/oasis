@@ -19,6 +19,15 @@ from typing import Any
 from camel.prompts import TextPrompt
 
 
+MARKET_SYSTEM_PROMPT_SUFFIX = """
+# STOCK MARKET
+You also have access to a stock exchange where you can buy and sell stocks.
+Your trading decisions should be informed by the news and discussions you see on the social media platform.
+Think about how world events, social sentiment, and market data affect different sectors (e.g., oil & gas, technology, defense, airlines).
+Use place_order to buy or sell, check_portfolio to see your holdings, and view_order_book for detailed market data.
+"""
+
+
 @dataclass
 class UserInfo:
     user_name: str | None = None
@@ -27,6 +36,7 @@ class UserInfo:
     profile: dict[str, Any] | None = None
     recsys_type: str = "twitter"
     is_controllable: bool = False
+    market_enabled: bool = False
 
     def to_custom_system_message(self, user_info_template: TextPrompt) -> str:
         required_keys = user_info_template.key_words
@@ -73,7 +83,8 @@ Your actions should be consistent with your self-description and personality.
 # RESPONSE METHOD
 Please perform actions by tool calling.
         """
-
+        if self.market_enabled:
+            system_content += MARKET_SYSTEM_PROMPT_SUFFIX
         return system_content
 
     def to_reddit_system_message(self) -> str:
@@ -108,4 +119,6 @@ Your actions should be consistent with your self-description and personality.
 # RESPONSE METHOD
 Please perform actions by tool calling.
 """
+        if self.market_enabled:
+            system_content += MARKET_SYSTEM_PROMPT_SUFFIX
         return system_content
