@@ -99,3 +99,6 @@ models/
 *.sqlite
 
 tmp
+
+# Personal Claude Code config
+CLAUDE.local.md
