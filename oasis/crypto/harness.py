@@ -402,7 +402,7 @@ class Simulation:
             # 5. Build feed filter
             self.feed_filter = FeedFilter(self.personas, self.graph_builder)
 
-        # 6. Pre-bucket news events by step
+        # 6. Pre-bucket news events by step AND persist to DB
         for event in self.news_events:
             try:
                 step = wall_clock_to_step(
@@ -412,11 +412,34 @@ class Simulation:
                 )
                 if 0 <= step < self.config.duration_steps:
                     self._news_by_step.setdefault(step, []).append(event)
+                    # Persist pre-scheduled events into the news_event table
+                    # so that god-mode and DB-based queries see a unified view.
+                    self.conn.execute(
+                        "INSERT INTO news_event "
+                        "(step, source, audience, content, title, "
+                        " sentiment_valence, magnitude, credibility, "
+                        " affected_instruments) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            step,
+                            event.source,
+                            event.audience.value
+                            if hasattr(event.audience, "value")
+                            else str(event.audience),
+                            event.body or "",
+                            event.title,
+                            event.sentiment_valence,
+                            event.magnitude,
+                            event.credibility,
+                            ",".join(event.affected_assets),
+                        ),
+                    )
             except ValueError:
                 logger.warning(
                     "News event %s has timestamp before scenario start, skipping",
                     event.title,
                 )
+        self.conn.commit()
 
         # 7. Record initial conservation baseline
         self._record_initial_totals()
@@ -441,8 +464,20 @@ class Simulation:
         posts_created = 0
 
         # Stage 2: Fire scheduled news events for this step.
-        news_this_step = self._news_by_step.get(step, [])
-        self._inject_news(step, news_this_step)
+        # Query the DB for ALL news at this step (pre-scheduled + god-mode).
+        news_this_step = self._fetch_news_for_step(step)
+        # Only insert pre-bucketed events that haven't been persisted yet
+        # (pre-scheduled events were already inserted in initialize()).
+        # _inject_news now only handles events NOT already in the DB.
+        prebucketed = self._news_by_step.get(step, [])
+        injected_titles = {row.title for row in news_this_step}
+        new_prebucketed = [
+            e for e in prebucketed
+            if e.title not in injected_titles
+        ]
+        if new_prebucketed:
+            self._inject_news(step, new_prebucketed)
+            news_this_step = self._fetch_news_for_step(step)
 
         # Stage 3: Snapshot state (reads below see end-of-step-(N-1) state)
 
@@ -836,6 +871,66 @@ class Simulation:
 
         return False
 
+    def _fetch_news_for_step(self, step: int) -> list[NewsEvent]:
+        """Query the live news_event table for events at this step.
+
+        Returns NewsEvent objects for every row at the given step,
+        including both pre-scheduled and god-mode injected events.
+        Deduplicates by (source, title, step).
+        """
+        rows = self.conn.execute(
+            "SELECT source, audience, content, title, sentiment_valence, "
+            "magnitude, credibility, affected_instruments, created_at "
+            "FROM news_event WHERE step = ?",
+            (step,),
+        ).fetchall()
+
+        seen: set[tuple[str, str, int]] = set()
+        events: list[NewsEvent] = []
+        for row in rows:
+            (source, audience, content, title, sentiment_valence,
+             magnitude, credibility, affected_instruments, created_at) = row
+
+            dedup_key = (source or "", title or "", step)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            # Parse affected_instruments: comma-separated TEXT or JSON array
+            assets: list[str] = []
+            if affected_instruments:
+                try:
+                    parsed = json.loads(affected_instruments)
+                    if isinstance(parsed, list):
+                        assets = parsed
+                    else:
+                        assets = [s.strip() for s in str(affected_instruments).split(",") if s.strip()]
+                except (json.JSONDecodeError, TypeError):
+                    assets = [s.strip() for s in str(affected_instruments).split(",") if s.strip()]
+
+            # Map audience string to Audience enum
+            from oasis.crypto.news_ingest import Audience
+            try:
+                aud = Audience(audience) if audience else Audience.ALL
+            except ValueError:
+                aud = Audience.ALL
+
+            events.append(NewsEvent(
+                source=source or "unknown",
+                source_id=None,
+                timestamp=self.clock.step_to_datetime(step),
+                title=title or "",
+                body=content,
+                url=None,
+                sentiment_valence=float(sentiment_valence or 0.0),
+                affected_assets=assets,
+                audience=aud,
+                magnitude=magnitude or "moderate",
+                credibility=credibility or "reported",
+                enricher="db",
+            ))
+        return events
+
     def _inject_news(self, step: int, news_events: list[NewsEvent]) -> None:
         """Insert news events into the DB and create corresponding posts."""
         for event in news_events:
@@ -898,8 +993,8 @@ class Simulation:
             if action_type != "DO_NOTHING":
                 self.memory.write_action(user_id, step, action_type, action)
 
-        # All agents: write news observations
-        news_this_step = self._news_by_step.get(step, [])
+        # All agents: write news observations (from DB, includes god-mode)
+        news_this_step = self._fetch_news_for_step(step)
         if news_this_step:
             for idx in range(len(self.personas)):
                 user_id = self.persona_idx_to_user_id[idx]
@@ -982,7 +1077,7 @@ class Simulation:
             stim_rows.append({
                 "user_id": user_id,
                 "price_stimulus": s,
-                "news_stimulus": 1.0 if self._news_by_step.get(step) else 0.0,
+                "news_stimulus": 1.0 if (self._news_by_step.get(step) or self._fetch_news_for_step(step)) else 0.0,
                 "total_stimulus": s,
             })
         self.telemetry.record_stimuli(step, stim_rows)
@@ -995,8 +1090,8 @@ class Simulation:
         ]
         self.telemetry.record_tiers(step, tier_rows)
 
-        # News
-        news_this_step = self._news_by_step.get(step, [])
+        # News (from DB, includes god-mode injected events)
+        news_this_step = self._fetch_news_for_step(step)
         if news_this_step:
             news_rows = [
                 {

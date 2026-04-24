@@ -257,7 +257,7 @@ export default function ReplayPage() {
 
         <div className="xl:col-span-2 space-y-2">
           <PriceChart />
-          <SocialGraph />
+          <SocialGraph runId={runId} />
         </div>
 
         <div className="space-y-2">

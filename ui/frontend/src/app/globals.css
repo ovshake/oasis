@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg: #0a0e14;
+  --color-panel: #121823;
+  --color-border: #1e2838;
+  --color-text: #e4ecf7;
+  --color-dim: #7f8ea8;
+  --color-bullish: #00ff88;
+  --color-bearish: #ff3355;
+  --color-warn: #ffaa00;
+  --color-cyan: #00ddff;
+  --color-purple: #a855f7;
+}
+
 @layer base {
   html, body {
     background-color: theme("colors.bg");

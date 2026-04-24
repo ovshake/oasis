@@ -611,6 +611,142 @@ class TestNewsInjection:
 
 
 # ===========================================================================
+# 10b. Pre-scheduled news persisted to DB at init
+# ===========================================================================
+
+
+class TestNewsPersistence:
+    def test_prescheduled_news_inserted_at_init(self, tmp_path: Path):
+        """Pre-scheduled news events are INSERTed into the news_event table
+        during initialize(), so that _fetch_news_for_step can find them."""
+        from oasis.crypto.news_ingest import Audience, NewsEvent
+
+        conn = _make_db()
+        personas = _load_personas(5)
+        templates = _load_templates()
+        config = _make_config(tmp_path, duration=30, llm_enabled=False)
+
+        news_ts = _START_DT + timedelta(minutes=10)
+        news_event = NewsEvent(
+            source="test",
+            source_id="test_persist_001",
+            timestamp=news_ts,
+            title="ETH merge complete",
+            body="Ethereum transitions to proof of stake.",
+            url=None,
+            sentiment_valence=0.6,
+            affected_assets=["ETH"],
+            audience=Audience.ALL,
+            magnitude="major",
+            credibility="confirmed",
+            enricher="test",
+        )
+
+        sim = Simulation(
+            conn=conn,
+            config=config,
+            personas=personas,
+            templates=templates,
+            news_events=[news_event],
+        )
+        sim.initialize()
+
+        # Verify the event was persisted to the DB at step 10
+        rows = conn.execute(
+            "SELECT title, step, source FROM news_event WHERE step = 10"
+        ).fetchall()
+        assert len(rows) >= 1, "Pre-scheduled news not found in DB at step 10"
+        titles = [r[0] for r in rows]
+        assert "ETH merge complete" in titles
+
+    def test_fetch_news_for_step_returns_db_events(self, tmp_path: Path):
+        """_fetch_news_for_step returns NewsEvent objects from the DB."""
+        from oasis.crypto.news_ingest import Audience, NewsEvent
+
+        conn = _make_db()
+        personas = _load_personas(5)
+        templates = _load_templates()
+        config = _make_config(tmp_path, duration=30, llm_enabled=False)
+
+        news_ts = _START_DT + timedelta(minutes=5)
+        news_event = NewsEvent(
+            source="test",
+            source_id="test_fetch_001",
+            timestamp=news_ts,
+            title="BTC halving",
+            body="Block reward halved.",
+            url=None,
+            sentiment_valence=0.5,
+            affected_assets=["BTC"],
+            audience=Audience.ALL,
+            magnitude="moderate",
+            credibility="confirmed",
+            enricher="test",
+        )
+
+        sim = Simulation(
+            conn=conn,
+            config=config,
+            personas=personas,
+            templates=templates,
+            news_events=[news_event],
+        )
+        sim.initialize()
+
+        # Fetch from the DB for step 5
+        fetched = sim._fetch_news_for_step(5)
+        assert len(fetched) >= 1, "_fetch_news_for_step returned nothing for step 5"
+        assert any(e.title == "BTC halving" for e in fetched)
+
+    def test_godmode_midrun_insert_picked_up(self, tmp_path: Path):
+        """A mid-run INSERT into news_event (simulating god-mode) is picked
+        up by _fetch_news_for_step at the matching step."""
+        from oasis.crypto.news_ingest import Audience, NewsEvent
+
+        conn = _make_db()
+        personas = _load_personas(5)
+        templates = _load_templates()
+        config = _make_config(tmp_path, duration=20, llm_enabled=False)
+
+        sim = Simulation(
+            conn=conn,
+            config=config,
+            personas=personas,
+            templates=templates,
+            news_events=[],  # No pre-scheduled news
+        )
+        sim.initialize()
+
+        # Simulate god-mode: INSERT a news_event targeting step 15
+        conn.execute(
+            "INSERT INTO news_event "
+            "(step, source, audience, content, title, sentiment_valence, "
+            " magnitude, credibility, affected_instruments, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (
+                15,
+                "god_mode",
+                "all",
+                "Tether reserves fully audited.",
+                "USDT audit passed",
+                0.3,
+                "moderate",
+                "confirmed",
+                "USDT",
+            ),
+        )
+        conn.commit()
+
+        # _fetch_news_for_step should find it
+        fetched = sim._fetch_news_for_step(15)
+        assert len(fetched) == 1
+        assert fetched[0].title == "USDT audit passed"
+        assert fetched[0].source == "god_mode"
+        assert fetched[0].sentiment_valence == 0.3
+        assert "USDT" in fetched[0].affected_assets
+
+
+# ===========================================================================
 # 11. Empty persona list
 # ===========================================================================
 

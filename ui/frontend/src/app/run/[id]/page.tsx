@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useRunTelemetry } from "@/lib/useRunTelemetry";
 import { useRunStore } from "@/lib/runStore";
@@ -14,6 +14,7 @@ import { OrderBook } from "@/components/run/OrderBook";
 import { NewsFeed } from "@/components/run/NewsFeed";
 import { AgentFeed } from "@/components/run/AgentFeed";
 import { Forecast } from "@/components/run/Forecast";
+import { GodMode } from "@/components/run/GodMode";
 import { PnlHistory } from "@/components/run/PnlHistory";
 import { RecentTrades } from "@/components/run/RecentTrades";
 import { EvalMiniCard } from "@/components/run/EvalMiniCard";
@@ -40,6 +41,25 @@ export default function LiveRunPage() {
   const setElapsedMs = useRunStore((s) => s.setElapsedMs);
   const reset = useRunStore((s) => s.reset);
   const storeSteps = useRunStore((s) => s.steps);
+  const actions = useRunStore((s) => s.actions);
+
+  // Derive recentActors: user_ids from the last 3 steps of actions
+  const recentActors = useMemo(() => {
+    if (storeSteps.length === 0) return [];
+    const currentStep = storeSteps[storeSteps.length - 1]?.step ?? 0;
+    const cutoff = currentStep - 3;
+    const ids = new Set<number>();
+    for (const a of actions) {
+      if (a.step >= cutoff && a.follower_count !== undefined) {
+        // follower_count as a proxy for user_id presence isn't ideal,
+        // but we extract what we can from the action feed.
+        ids.add(a.step * 1000 + (a.follower_count ?? 0));
+      }
+    }
+    // In practice, actions don't carry user_id directly in the WS shape.
+    // Return empty until the telemetry shape includes user_id.
+    return [] as number[];
+  }, [storeSteps, actions]);
 
   // Reset store on mount, sync WS data into store
   useEffect(() => {
@@ -98,14 +118,15 @@ export default function LiveRunPage() {
         {/* Column 2-3: Center — price chart + social graph */}
         <div className="xl:col-span-2 space-y-2">
           <PriceChart />
-          <SocialGraph />
+          <SocialGraph runId={runId} recentActors={recentActors} />
         </div>
 
-        {/* Column 4: Right sidebar — order book + feeds + forecast */}
+        {/* Column 4: Right sidebar — order book + feeds + god mode + forecast */}
         <div className="space-y-2">
           <OrderBook />
           <NewsFeed />
           <AgentFeed />
+          <GodMode runId={runId} />
           <Forecast />
         </div>
       </div>

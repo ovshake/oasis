@@ -7,13 +7,20 @@ DELETE /api/runs/{run_id}                -- stop a run
 GET    /api/runs/{run_id}/parquet/{sec}  -- telemetry section as JSON
 GET    /api/runs/{run_id}/config         -- config.yaml
 GET    /api/runs/{run_id}/initial_prices -- initial_prices.json
+GET    /api/runs/{run_id}/graph          -- social graph {nodes, edges}
+POST   /api/runs/{run_id}/inject-news    -- god-mode news injection
+GET    /api/runs/{run_id}/god-mode-events -- list injected god-mode events
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import sqlite3
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -133,3 +140,231 @@ async def get_initial_prices(run_id: str):
         return json.loads(prices_path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise HTTPException(500, detail=str(exc))
+
+
+MAX_GRAPH_NODES = 2000
+
+
+@router.get("/{run_id}/graph")
+async def get_run_graph(run_id: str):
+    """Return {nodes, edges} for the run's persisted social graph.
+
+    nodes: [{user_id, persona_id, archetype, name, follower_count}]
+    edges: [{source: user_id, target: user_id}]
+    """
+    mgr = RunManager.get()
+    info = mgr.get_run(run_id)
+    if info is None:
+        raise HTTPException(404, detail=f"Run '{run_id}' not found")
+
+    db_path = Path(info.output_dir) / "simulation.db"
+    if not db_path.exists():
+        raise HTTPException(404, detail="run not initialized")
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+
+        # Fetch edges
+        edges_raw = conn.execute(
+            "SELECT follower_id, followee_id FROM follow"
+        ).fetchall()
+        edges = [
+            {"source": row["follower_id"], "target": row["followee_id"]}
+            for row in edges_raw
+        ]
+
+        # Compute follower counts
+        follower_counts: Counter[int] = Counter()
+        user_ids_in_edges: set[int] = set()
+        for e in edges:
+            follower_counts[e["target"]] += 1
+            user_ids_in_edges.add(e["source"])
+            user_ids_in_edges.add(e["target"])
+
+        # Fetch user -> persona -> archetype mapping
+        node_rows = conn.execute(
+            """
+            SELECT u.user_id, ap.persona_id, p.archetype, p.name
+            FROM user u
+            JOIN agent_persona ap ON ap.user_id = u.user_id
+            JOIN persona p ON p.persona_id = ap.persona_id
+            """
+        ).fetchall()
+        conn.close()
+
+        nodes = []
+        for row in node_rows:
+            uid = row["user_id"]
+            nodes.append({
+                "user_id": uid,
+                "persona_id": row["persona_id"],
+                "archetype": row["archetype"] or "lurker",
+                "name": row["name"] or f"agent_{uid}",
+                "follower_count": follower_counts.get(uid, 0),
+            })
+
+        # Cap at MAX_GRAPH_NODES, keeping highest-follower nodes
+        if len(nodes) > MAX_GRAPH_NODES:
+            nodes.sort(key=lambda n: n["follower_count"], reverse=True)
+            nodes = nodes[:MAX_GRAPH_NODES]
+            kept_ids = {n["user_id"] for n in nodes}
+            edges = [
+                e for e in edges
+                if e["source"] in kept_ids and e["target"] in kept_ids
+            ]
+
+        return {"nodes": nodes, "edges": edges}
+
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(500, detail=f"Database error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# God-mode news injection
+# ---------------------------------------------------------------------------
+
+
+class NewsInjection(BaseModel):
+    """Request body for injecting a news event into a running simulation."""
+
+    title: str
+    content: str
+    sentiment_valence: float = Field(ge=-1.0, le=1.0)
+    affected_assets: list[str] = Field(default_factory=list)
+    audience: Literal[
+        "all", "news_traders", "kols", "crypto_natives", "whales"
+    ] = "all"
+    magnitude: Literal["minor", "moderate", "major", "critical"] = "moderate"
+    credibility: Literal["rumor", "reported", "confirmed"] = "reported"
+
+
+def _get_simulation_db(run_id: str) -> tuple[sqlite3.Connection, Path]:
+    """Look up a run's simulation.db, returning (conn, db_path).
+
+    Raises HTTPException(404) if the run or DB file doesn't exist.
+    """
+    mgr = RunManager.get()
+    info = mgr.get_run(run_id)
+    if info is None:
+        raise HTTPException(404, detail=f"Run '{run_id}' not found")
+
+    db_path = Path(info.output_dir) / "simulation.db"
+    if not db_path.exists():
+        raise HTTPException(
+            404,
+            detail=f"simulation.db not found for run '{run_id}' "
+            "(simulation may not have started yet)",
+        )
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        return conn, db_path
+    except sqlite3.Error as exc:
+        raise HTTPException(500, detail=f"Cannot open simulation.db: {exc}")
+
+
+def _compute_next_step(conn: sqlite3.Connection) -> int:
+    """Estimate the next upcoming simulation step.
+
+    Strategy: MAX(step) + 1 from the actions table (written each tick).
+    Falls back to MAX(step) + 1 from news_event, then 1.
+    """
+    row = conn.execute(
+        "SELECT MAX(step) FROM action"
+    ).fetchone()
+    if row and row[0] is not None:
+        return int(row[0]) + 1
+
+    # Fallback: check news_event table
+    row = conn.execute(
+        "SELECT MAX(step) FROM news_event"
+    ).fetchone()
+    if row and row[0] is not None:
+        return int(row[0]) + 1
+
+    return 1
+
+
+@router.post("/{run_id}/inject-news")
+def inject_news(run_id: str, body: NewsInjection) -> dict:
+    """Insert a news_event row into the running simulation's DB.
+
+    The event fires at the next upcoming step. Returns the inserted row
+    metadata including the target step.
+    """
+    conn, db_path = _get_simulation_db(run_id)
+    try:
+        next_step = _compute_next_step(conn)
+        affected_str = ",".join(body.affected_assets)
+        now = datetime.now(timezone.utc).isoformat()
+
+        cursor = conn.execute(
+            "INSERT INTO news_event "
+            "(step, source, audience, content, title, sentiment_valence, "
+            " magnitude, credibility, affected_instruments, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                next_step,
+                "god_mode",
+                body.audience,
+                body.content,
+                body.title,
+                body.sentiment_valence,
+                body.magnitude,
+                body.credibility,
+                affected_str,
+                now,
+            ),
+        )
+        conn.commit()
+        event_id = cursor.lastrowid
+
+        return {
+            "step": next_step,
+            "event_id": event_id,
+            "source": "god_mode",
+            "title": body.title,
+            "audience": body.audience,
+            "magnitude": body.magnitude,
+            "sentiment_valence": body.sentiment_valence,
+        }
+    except sqlite3.Error as exc:
+        raise HTTPException(500, detail=f"Database error: {exc}")
+    finally:
+        conn.close()
+
+
+@router.get("/{run_id}/god-mode-events")
+def list_god_mode_events(run_id: str) -> list[dict]:
+    """Return news_event rows where source='god_mode', newest first, limit 20."""
+    conn, db_path = _get_simulation_db(run_id)
+    try:
+        rows = conn.execute(
+            "SELECT event_id, step, source, audience, content, title, "
+            "sentiment_valence, magnitude, credibility, "
+            "affected_instruments, created_at "
+            "FROM news_event WHERE source = 'god_mode' "
+            "ORDER BY event_id DESC LIMIT 20"
+        ).fetchall()
+
+        return [
+            {
+                "event_id": r[0],
+                "step": r[1],
+                "source": r[2],
+                "audience": r[3],
+                "content": r[4],
+                "title": r[5],
+                "sentiment_valence": r[6],
+                "magnitude": r[7],
+                "credibility": r[8],
+                "affected_instruments": r[9],
+                "created_at": r[10],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as exc:
+        raise HTTPException(500, detail=f"Database error: {exc}")
+    finally:
+        conn.close()

@@ -9,6 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.11",
+    "@types/d3-zoom": "^3.0.8",
+    "d3-force": "3.0.0",
+    "d3-selection": "3.0.0",
+    "d3-zoom": "3.0.0",
     "next": "15.1.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -371,3 +372,294 @@ def test_persona_distribution():
     assert "hodler" in dist
     assert dist["lurker"] == 10
     assert sum(dist.values()) == 100
+
+
+# ---------------------------------------------------------------------------
+# 10. Social graph: GET /api/runs/{id}/graph
+# ---------------------------------------------------------------------------
+
+
+def _create_graph_db(out_dir: str) -> None:
+    """Create a minimal simulation.db with user, persona, agent_persona, follow."""
+    import sqlite3 as _sqlite3
+
+    db_path = Path(out_dir) / "simulation.db"
+    conn = _sqlite3.connect(str(db_path))
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS user (
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id INTEGER,
+            user_name TEXT,
+            name TEXT,
+            bio TEXT,
+            created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS persona (
+            persona_id TEXT PRIMARY KEY,
+            archetype TEXT,
+            name TEXT,
+            backstory TEXT,
+            voice_style TEXT,
+            config_json TEXT,
+            generated_by TEXT,
+            created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS agent_persona (
+            user_id INTEGER PRIMARY KEY,
+            persona_id TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES user(user_id),
+            FOREIGN KEY(persona_id) REFERENCES persona(persona_id)
+        );
+        CREATE TABLE IF NOT EXISTS follow (
+            follower_id INTEGER NOT NULL,
+            followee_id INTEGER NOT NULL,
+            created_at DATETIME,
+            PRIMARY KEY(follower_id, followee_id),
+            FOREIGN KEY(follower_id) REFERENCES user(user_id),
+            FOREIGN KEY(followee_id) REFERENCES user(user_id)
+        );
+
+        INSERT INTO user(user_id, user_name, name) VALUES (1, 'alice', 'Alice');
+        INSERT INTO user(user_id, user_name, name) VALUES (2, 'bob', 'Bob');
+        INSERT INTO user(user_id, user_name, name) VALUES (3, 'carol', 'Carol');
+
+        INSERT INTO persona(persona_id, archetype, name) VALUES ('p_001', 'hodler', 'Alice');
+        INSERT INTO persona(persona_id, archetype, name) VALUES ('p_002', 'fomo_degen', 'Bob');
+        INSERT INTO persona(persona_id, archetype, name) VALUES ('p_003', 'whale', 'Carol');
+
+        INSERT INTO agent_persona(user_id, persona_id) VALUES (1, 'p_001');
+        INSERT INTO agent_persona(user_id, persona_id) VALUES (2, 'p_002');
+        INSERT INTO agent_persona(user_id, persona_id) VALUES (3, 'p_003');
+
+        INSERT INTO follow(follower_id, followee_id) VALUES (1, 2);
+        INSERT INTO follow(follower_id, followee_id) VALUES (1, 3);
+        INSERT INTO follow(follower_id, followee_id) VALUES (2, 3);
+    """)
+    conn.commit()
+    conn.close()
+
+
+def test_graph_returns_nodes_and_edges(mock_run, tmp_output_dir):
+    """GET /api/runs/{id}/graph returns correct nodes/edges from simulation.db."""
+    _create_graph_db(tmp_output_dir)
+
+    resp = client.get("/api/runs/test123/graph")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert "nodes" in data
+    assert "edges" in data
+    assert len(data["nodes"]) == 3
+    assert len(data["edges"]) == 3
+
+    # Verify node structure
+    node_by_id = {n["user_id"]: n for n in data["nodes"]}
+    assert node_by_id[1]["archetype"] == "hodler"
+    assert node_by_id[2]["archetype"] == "fomo_degen"
+    assert node_by_id[3]["archetype"] == "whale"
+    assert node_by_id[3]["name"] == "Carol"
+
+    # Carol has 2 followers (from user 1 and user 2)
+    assert node_by_id[3]["follower_count"] == 2
+    # Bob has 1 follower (from user 1)
+    assert node_by_id[2]["follower_count"] == 1
+    # Alice has 0 followers
+    assert node_by_id[1]["follower_count"] == 0
+
+    # Verify edges
+    edge_tuples = {(e["source"], e["target"]) for e in data["edges"]}
+    assert (1, 2) in edge_tuples
+    assert (1, 3) in edge_tuples
+    assert (2, 3) in edge_tuples
+
+
+def test_graph_404_no_db(mock_run):
+    """GET /api/runs/{id}/graph returns 404 when simulation.db doesn't exist."""
+    resp = client.get("/api/runs/test123/graph")
+    assert resp.status_code == 404
+    assert "run not initialized" in resp.json()["detail"]
+
+
+def test_graph_404_unknown_run():
+    """GET /api/runs/{id}/graph returns 404 for unknown run_id."""
+    resp = client.get("/api/runs/nonexistent/graph")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 11. God-mode news injection
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_run_with_db(tmp_output_dir):
+    """Set up a mock run with a simulation.db containing the news_event table."""
+    from ui.backend.services.run_manager import RunInfo
+
+    # Create simulation.db with the news_event table + action table
+    db_path = Path(tmp_output_dir) / "simulation.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS news_event (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step INTEGER NOT NULL,
+            source TEXT,
+            audience TEXT NOT NULL DEFAULT 'all',
+            content TEXT,
+            title TEXT,
+            sentiment_valence REAL,
+            magnitude TEXT,
+            credibility TEXT,
+            affected_instruments TEXT,
+            created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_news_step ON news_event(step)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS action (
+            action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step INTEGER NOT NULL,
+            user_id INTEGER,
+            action_type TEXT
+        )
+    """)
+    # Insert some actions so _compute_next_step works
+    conn.execute(
+        "INSERT INTO action (step, user_id, action_type) VALUES (?, ?, ?)",
+        (5, 1, "PLACE_ORDER"),
+    )
+    conn.commit()
+    conn.close()
+
+    mgr = RunManager.get()
+    info = RunInfo(
+        run_id="godtest1",
+        scenario_name="quiet_market",
+        scenario_path="scenarios/quiet_market.yaml",
+        seed=42,
+        no_llm=True,
+        pid=99999,
+        output_dir=tmp_output_dir,
+        status="running",
+        start_time="2026-04-23T00:00:00+00:00",
+    )
+    mgr._runs["godtest1"] = info
+    return info
+
+
+def test_inject_news(mock_run_with_db):
+    """POST /api/runs/{id}/inject-news inserts a god_mode row and returns step."""
+    resp = client.post(
+        "/api/runs/godtest1/inject-news",
+        json={
+            "title": "SEC approves spot ETF",
+            "content": "Major regulatory milestone for crypto.",
+            "sentiment_valence": 0.9,
+            "affected_assets": ["BTC", "ETH"],
+            "audience": "all",
+            "magnitude": "critical",
+            "credibility": "confirmed",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["source"] == "god_mode"
+    assert data["step"] == 6  # MAX(step)=5 + 1
+    assert data["event_id"] is not None
+    assert data["title"] == "SEC approves spot ETF"
+
+    # Verify the row is in the DB
+    db_path = Path(mock_run_with_db.output_dir) / "simulation.db"
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        "SELECT source, title, step FROM news_event WHERE source = 'god_mode'"
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0][0] == "god_mode"
+    assert rows[0][1] == "SEC approves spot ETF"
+    assert rows[0][2] == 6
+
+
+def test_inject_news_validation():
+    """POST /api/runs/{id}/inject-news validates sentiment range."""
+    from ui.backend.services.run_manager import RunInfo
+
+    mgr = RunManager.get()
+    info = RunInfo(
+        run_id="valtest1",
+        scenario_name="test",
+        scenario_path="test.yaml",
+        seed=42,
+        no_llm=True,
+        pid=99999,
+        output_dir="/tmp/nonexistent",
+        status="running",
+        start_time="2026-04-23T00:00:00+00:00",
+    )
+    mgr._runs["valtest1"] = info
+
+    # sentiment_valence out of range should fail validation (422)
+    resp = client.post(
+        "/api/runs/valtest1/inject-news",
+        json={
+            "title": "Test",
+            "content": "Test content",
+            "sentiment_valence": 2.0,  # out of [-1, 1]
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_inject_news_run_not_found():
+    """POST /api/runs/{id}/inject-news for missing run returns 404."""
+    resp = client.post(
+        "/api/runs/nonexistent/inject-news",
+        json={
+            "title": "Test",
+            "content": "Test content",
+            "sentiment_valence": 0.0,
+        },
+    )
+    assert resp.status_code == 404
+
+
+def test_list_god_mode_events(mock_run_with_db):
+    """GET /api/runs/{id}/god-mode-events returns only god_mode rows."""
+    # Insert two god_mode events and one non-god_mode event
+    db_path = Path(mock_run_with_db.output_dir) / "simulation.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO news_event (step, source, audience, title, content, "
+        "sentiment_valence, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        (1, "god_mode", "all", "God event 1", "Content 1", 0.5),
+    )
+    conn.execute(
+        "INSERT INTO news_event (step, source, audience, title, content, "
+        "sentiment_valence, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        (2, "god_mode", "whales", "God event 2", "Content 2", -0.3),
+    )
+    conn.execute(
+        "INSERT INTO news_event (step, source, audience, title, content, "
+        "sentiment_valence, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        (3, "market_auto", "all", "Auto event", "Auto content", 0.0),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = client.get("/api/runs/godtest1/god-mode-events")
+    assert resp.status_code == 200
+    events = resp.json()
+    assert isinstance(events, list)
+    assert len(events) == 2  # Only god_mode events
+    for ev in events:
+        assert ev["source"] == "god_mode"
+    # Newest first
+    assert events[0]["title"] == "God event 2"
+    assert events[1]["title"] == "God event 1"
+
+
+def test_list_god_mode_events_not_found():
+    """GET /api/runs/{id}/god-mode-events for missing run returns 404."""
+    resp = client.get("/api/runs/nonexistent/god-mode-events")
+    assert resp.status_code == 404
