@@ -286,6 +286,101 @@ def _compute_next_step(conn: sqlite3.Connection) -> int:
     return 1
 
 
+@router.get("/{run_id}/posts")
+def get_posts(
+    run_id: str,
+    limit: int = 200,
+    since_step: int = 0,
+    include_comments: bool = True,
+) -> dict:
+    """Return agent-generated posts (and optionally comments) joined with
+    archetype + handle for rendering in a social feed panel.
+
+    Response: {posts: [...], comments: [...], counts: {posts, comments}}
+    """
+    mgr = RunManager.get()
+    info = mgr.get_run(run_id)
+    if info is None:
+        raise HTTPException(404, detail=f"Run '{run_id}' not found")
+
+    db_path = Path(info.output_dir) / "simulation.db"
+    if not db_path.exists():
+        raise HTTPException(404, detail="run not initialized")
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        # Posts table in OASIS core schema doesn't have a `step` column —
+        # it has a `created_at` ISO timestamp. We derive step ordering by
+        # post_id (monotonic insertion order) for simplicity. Newest first.
+        post_rows = conn.execute(
+            """
+            SELECT p.post_id, p.user_id, p.content, p.created_at,
+                   p.num_likes, p.num_dislikes, u.user_name, ap.persona_id,
+                   per.archetype
+            FROM post p
+            LEFT JOIN user u ON u.user_id = p.user_id
+            LEFT JOIN agent_persona ap ON ap.user_id = p.user_id
+            LEFT JOIN persona per ON per.persona_id = ap.persona_id
+            ORDER BY p.post_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        posts = [
+            {
+                "post_id": r[0],
+                "user_id": r[1],
+                "content": r[2],
+                "created_at": r[3],
+                "likes": r[4],
+                "dislikes": r[5],
+                "handle": r[6],
+                "persona_id": r[7],
+                "archetype": r[8] or "unknown",
+            }
+            for r in post_rows
+        ]
+
+        comments: list[dict] = []
+        if include_comments:
+            comment_rows = conn.execute(
+                """
+                SELECT c.comment_id, c.post_id, c.user_id, c.content,
+                       c.created_at, u.user_name, per.archetype
+                FROM comment c
+                LEFT JOIN user u ON u.user_id = c.user_id
+                LEFT JOIN agent_persona ap ON ap.user_id = c.user_id
+                LEFT JOIN persona per ON per.persona_id = ap.persona_id
+                ORDER BY c.comment_id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            comments = [
+                {
+                    "comment_id": r[0],
+                    "post_id": r[1],
+                    "user_id": r[2],
+                    "content": r[3],
+                    "created_at": r[4],
+                    "handle": r[5],
+                    "archetype": r[6] or "unknown",
+                }
+                for r in comment_rows
+            ]
+
+        total_posts = conn.execute("SELECT COUNT(*) FROM post").fetchone()[0]
+        total_comments = conn.execute("SELECT COUNT(*) FROM comment").fetchone()[0]
+
+        return {
+            "posts": posts,
+            "comments": comments,
+            "counts": {"posts": total_posts, "comments": total_comments},
+        }
+    finally:
+        conn.close()
+
+
 @router.get("/{run_id}/orderbook")
 def get_orderbook(run_id: str, pair: str = "BTC/USD", depth: int = 10) -> dict:
     """Return top-N bids and asks for a pair from the run's simulation.db.

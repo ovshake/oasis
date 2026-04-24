@@ -18,6 +18,7 @@ import { GodMode } from "@/components/run/GodMode";
 import { PnlHistory } from "@/components/run/PnlHistory";
 import { RecentTrades } from "@/components/run/RecentTrades";
 import { EvalMiniCard } from "@/components/run/EvalMiniCard";
+import { SocialFeed } from "@/components/run/SocialFeed";
 
 /**
  * Live run view — connected via WebSocket to /ws/runs/{id}.
@@ -136,6 +137,11 @@ export default function LiveRunPage() {
         <PnlHistory />
         <RecentTrades />
         <EvalMiniCard runId={runId} />
+      </div>
+
+      {/* Full-width social feed */}
+      <div className="mt-2">
+        <SocialFeed runId={runId} showComments={true} maxHeight="max-h-[600px]" />
       </div>
     </div>
   );

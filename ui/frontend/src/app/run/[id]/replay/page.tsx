@@ -18,6 +18,7 @@ import { Forecast } from "@/components/run/Forecast";
 import { PnlHistory } from "@/components/run/PnlHistory";
 import { RecentTrades } from "@/components/run/RecentTrades";
 import { EvalMiniCard } from "@/components/run/EvalMiniCard";
+import { SocialFeed } from "@/components/run/SocialFeed";
 
 /**
  * Replay view — same layout as Live but driven by a step scrubber
@@ -282,6 +283,10 @@ export default function ReplayPage() {
         <PnlHistory />
         <RecentTrades />
         <EvalMiniCard runId={runId} />
+      </div>
+
+      <div className="mt-2">
+        <SocialFeed runId={runId} showComments={true} maxHeight="max-h-[600px]" />
       </div>
     </div>
   );
