@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    background-color: theme("colors.bg");
+    color: theme("colors.text");
+    font-family: theme("fontFamily.mono");
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  /* Scrollbars styled to match terminal */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: theme("colors.bg"); }
+  ::-webkit-scrollbar-thumb { background: theme("colors.border"); }
+  ::-webkit-scrollbar-thumb:hover { background: theme("colors.border-bright"); }
+}
+
+@layer components {
+  .panel {
+    @apply bg-panel border border-border p-3;
+  }
+  .panel-title {
+    @apply text-cyan text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2;
+  }
+  .live-dot::before {
+    content: "\25CF";
+    @apply text-cyan inline-block mr-1;
+    text-shadow: 0 0 12px rgba(0,221,255,0.3);
+    animation: pulse 2s infinite;
+  }
+  .input-field {
+    @apply bg-bg border border-border text-text text-[11px] px-2 py-1
+           font-mono focus:border-cyan focus:outline-none transition-colors w-full;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+  }
+}
