@@ -41,6 +41,7 @@ interface FormState {
   news_kind: NewsKind;
   manual_events: ManualNewsEvent[];
   mix: PopulationMix;
+  llm_enabled: boolean;   // off by default — gate-only is free and fast
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,7 @@ export function ScenarioForm({ initial, isNew }: Props) {
     news_kind: initial?.news_source?.kind ?? "manual",
     manual_events: initial?.manual_events ?? [],
     mix: initial?.population_mix ?? { ...DEFAULT_MIX },
+    llm_enabled: initial?.llm_enabled ?? false,   // default gate-only
   });
 
   const [showYaml, setShowYaml] = useState(false);
@@ -151,6 +153,7 @@ export function ScenarioForm({ initial, isNew }: Props) {
       population_mix: form.mix,
       news_source: { kind: form.news_kind, providers: [], enrich_with: "mock" },
       manual_events: form.news_kind === "manual" ? form.manual_events : [],
+      llm_enabled: form.llm_enabled,
     };
   }, [form]);
 
@@ -192,14 +195,21 @@ export function ScenarioForm({ initial, isNew }: Props) {
     setError(null);
     try {
       await api.saveScenario(buildPayload());
-      const { run_id } = await api.startRun(form.name, [form.seed], false);
+      // no_llm is the INVERSE of llm_enabled — the CLI/API uses a
+      // "suppress LLM" flag so that scenarios with llm_enabled=true
+      // in their YAML can still be forced gate-only from the runner.
+      const { run_id } = await api.startRun(
+        form.name,
+        [form.seed],
+        !form.llm_enabled,
+      );
       router.push(`/run/${run_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [form.name, form.seed, mixValid, buildPayload, router]);
+  }, [form.name, form.seed, form.llm_enabled, mixValid, buildPayload, router]);
 
   // -- Render --
   return (
@@ -306,6 +316,42 @@ export function ScenarioForm({ initial, isNew }: Props) {
               className="input-field"
             />
           </Field>
+        </div>
+
+        {/* LLM toggle — drives wall-time and cost drastically. Off by
+            default; scenarios shipped in the repo all default to gate-only. */}
+        <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.llm_enabled}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, llm_enabled: e.target.checked }))
+              }
+              className="accent-cyan h-3.5 w-3.5"
+            />
+            <span className="text-[11px] uppercase tracking-widest">
+              LLM agents
+            </span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 ${
+                form.llm_enabled
+                  ? "bg-warn/20 text-warn"
+                  : "bg-border text-dim"
+              }`}
+            >
+              {form.llm_enabled ? "ON — real content, ~$ / slow" : "OFF — gate-only, free, seconds"}
+            </span>
+          </label>
+          {form.llm_enabled && (
+            <span className="text-[10px] text-dim">
+              est. ~{Math.round(
+                (form.duration_steps * form.agents_count * 0.05 * 0.003) * 100,
+              ) / 100}$ USD · ~{
+                Math.round((form.duration_steps * form.agents_count * 0.05) / 50 * 2 / 60)
+              } min wall-clock (5% active rate, claude-sonnet-4-6)
+            </span>
+          )}
         </div>
       </section>
 
