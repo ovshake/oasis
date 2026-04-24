@@ -825,47 +825,71 @@ class Simulation:
     def _heuristic_trade(self, persona: Persona, step: int) -> dict:
         """Generate a heuristic trade action.
 
-        MMs place bid+ask at last_price +/- 20bps.
-        Others place a small random order.
+        MMs quote bid+ask on EVERY tradeable pair at last_price +/- 20bps.
+        Other archetypes pick a random pair per trade so ETH/XAU/WTI see
+        flow too, not just BTC. Quantities scale by USD notional so
+        orders are meaningful across very different price scales
+        (~$80k BTC vs ~$75 WTI).
         """
-        # Pick the first pair (BTC/USD typically)
         if not self._pair_ids:
             return {"action_type": "DO_NOTHING"}
 
-        pair_id = self._pair_ids[0]
-        state = self.exchange.pair_state(pair_id)
-        last_price = state["last_price"]
-        if last_price is None or last_price <= 0:
+        # Build the candidate pair list once per call. Skip stablecoins —
+        # USDT/USD is pegged at 1.0 and doesn't have interesting
+        # price-formation dynamics in the heuristic layer.
+        candidates: list[tuple[int, str, float]] = []
+        for pid in self._pair_ids:
+            state = self.exchange.pair_state(pid)
+            lp = state["last_price"]
+            sym = state["base_symbol"]
+            if lp is None or lp <= 0 or sym in ("USDT",):
+                continue
+            candidates.append((pid, sym, float(lp)))
+        if not candidates:
             return {"action_type": "DO_NOTHING"}
 
-        base_sym = state["base_symbol"]
-
         if persona.archetype == "market_maker":
-            # MM: bid and ask at last_price +/- 20bps
+            # MMs are multi-asset liquidity providers — quote both sides
+            # on every pair. Notional ~ $100 per side per pair so their
+            # quotes are a meaningful fraction of book depth.
             spread_bps = 20
-            bid_price = round(last_price * (1 - spread_bps / 10000), 2)
-            ask_price = round(last_price * (1 + spread_bps / 10000), 2)
-            qty = round(float(self.rng.uniform(0.001, 0.005)), 6)
-            return {
-                "action_type": "PLACE_ORDER",
-                "orders": [
-                    {"side": "buy", "symbol": base_sym, "price": bid_price, "quantity": qty},
-                    {"side": "sell", "symbol": base_sym, "price": ask_price, "quantity": qty},
-                ],
-            }
-        else:
-            # Random small order
-            side = "buy" if self.rng.random() > 0.5 else "sell"
-            offset_bps = float(self.rng.integers(-30, 30))
-            price = round(last_price * (1 + offset_bps / 10000), 2)
-            qty = round(float(self.rng.uniform(0.0001, 0.002)), 6)
-            return {
-                "action_type": "PLACE_ORDER",
-                "side": side,
-                "symbol": base_sym,
-                "price": price,
-                "quantity": qty,
-            }
+            orders: list[dict] = []
+            for _pid, sym, last_price in candidates:
+                mm_notional = float(self.rng.uniform(50, 150))
+                qty = round(mm_notional / last_price, 6)
+                if qty <= 0:
+                    continue
+                bid_price = round(last_price * (1 - spread_bps / 10000), 4)
+                ask_price = round(last_price * (1 + spread_bps / 10000), 4)
+                orders.append(
+                    {"side": "buy", "symbol": sym, "price": bid_price, "quantity": qty}
+                )
+                orders.append(
+                    {"side": "sell", "symbol": sym, "price": ask_price, "quantity": qty}
+                )
+            if not orders:
+                return {"action_type": "DO_NOTHING"}
+            return {"action_type": "PLACE_ORDER", "orders": orders}
+
+        # Non-MM: pick one random pair per trade decision. Notional
+        # scaled by persona.risk_tolerance so whales/fomo take bigger
+        # positions than lurkers/ta.
+        pick = int(self.rng.integers(0, len(candidates)))
+        _pid, sym, last_price = candidates[pick]
+        notional = float(self.rng.uniform(20, 100)) * (0.5 + persona.risk_tolerance)
+        qty = round(notional / last_price, 6)
+        if qty <= 0:
+            return {"action_type": "DO_NOTHING"}
+        side = "buy" if self.rng.random() > 0.5 else "sell"
+        offset_bps = float(self.rng.integers(-30, 30))
+        price = round(last_price * (1 + offset_bps / 10000), 4)
+        return {
+            "action_type": "PLACE_ORDER",
+            "side": side,
+            "symbol": sym,
+            "price": price,
+            "quantity": qty,
+        }
 
     def _enforce_invariants(
         self,
