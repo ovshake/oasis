@@ -1,350 +1,346 @@
-# DeSimulator — Crypto Narrative Market Sim
+# DeSimulator
 
-A narrative-driven cross-asset market simulator. Launch thousands of LLM (or
-heuristic) agents across a 6-asset exchange, inject news events, and watch
-prices, order books, and social feeds evolve.
+**A "what if?" engine for crypto markets.**
 
-Built by [Defily](https://www.defily.ai/) on top of
-[CAMEL-AI/OASIS](https://github.com/camel-ai/oasis).
+Ask questions like:
+- *"What happens to BTC if the Fed cuts rates next week?"*
+- *"If a big KOL tweets about ETH, how fast does the news spread and what
+  does the chart look like?"*
+- *"What does a Luna-style stablecoin depeg do to the rest of the market?"*
 
----
+DeSimulator runs the scenario with hundreds or thousands of AI-driven
+trader-agents — each with its own persona — and shows you the resulting
+price action, order flow, social feed, and P&L in a Bloomberg-style
+terminal.
 
-## What it simulates
-
-- **6 assets**: BTC, ETH, USDT, XAU (gold), WTI (oil), USD
-- **Up to 10,000 agents** with ten distinct personas (HODLer, FOMO Degen,
-  Whale, KOL, Market Maker, Paperhands, Contrarian, News Trader, TA, Lurker)
-- **Two decision modes**:
-  - **Gate-only** (free, ~5 seconds) — agents act via heuristic rules
-  - **LLM-backed** (Claude Sonnet, ~minutes, paid) — agents post and trade
-    in their own voice
-- **News injection**: hand-authored timeline, historical replay from
-  CryptoPanic, or live-snapshot of today's news
-- **End-to-end pipeline**: scenario YAML → matching engine → order book →
-  trades → social posts → replay UI
+Built by [Defily](https://www.defily.ai/).
 
 ---
 
-## Quick start
+## What makes it different from a backtest
 
-### 1. Install
+A backtest replays what *did* happen. DeSimulator runs what *might* happen.
 
-```bash
-# Python backend deps (into your preferred venv — README assumes ~/venvs/aragen)
-uv pip install --python ~/venvs/aragen/bin/python --quiet \
-    pydantic pyyaml numpy pytest anthropic python-dotenv pyarrow \
-    scipy pandas jinja2 plotly fastapi "uvicorn[standard]" \
-    websockets httpx yfinance requests
-
-# Frontend deps
-cd ui/frontend && pnpm install && cd ../..
-```
-
-### 2. Set your API key (only needed for LLM-mode runs)
-
-```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
-```
-
-`.env` is gitignored. The backend auto-loads it at startup.
-
-### 3. Start the servers (two terminals)
-
-```bash
-# Terminal 1 — backend on :8000
-~/venvs/aragen/bin/python -m uvicorn ui.backend.main:app --host 127.0.0.1 --port 8000
-
-# Terminal 2 — frontend on :3000
-cd ui/frontend && pnpm run dev
-```
-
-### 4. Open the UI
-
-http://localhost:3000
+- **Markets move because people act.** We simulate the people directly
+  — HODLers hold, FOMO degens chase pumps, paperhands panic-sell,
+  whales accumulate, KOLs post threads, market makers quote spreads.
+- **News drives narrative.** You can hand-inject a headline at any
+  point in the timeline — *"Fed pauses hikes"* at step 50, *"SEC
+  approves ETF"* at step 120 — and watch the reaction propagate
+  through the social graph into prices.
+- **Every run is explorable.** You get a replay with step-by-step
+  scrubber: rewind, inspect any moment, see which agent tweeted
+  what, watch the order book evolve.
 
 ---
 
-## Features
+## Opening the app
 
-### Home page
+If your environment is already set up, just open **http://localhost:3000**
+in your browser.
+
+If you're starting from scratch, ask whoever set this up to run the two
+start commands for you. Starting the servers is a one-time technical
+step; once they're running, everything below is point-and-click.
+
+---
+
+## The home page
 
 ![Home page](docs/screenshots/01-home.png)
 
-The landing page has two tables:
+Two tables.
 
-- **Recent Runs** — every completed/running simulation. Click REPLAY to open
-  the analysis view, EVAL to open the score report.
-- **Scenario Library** — YAML scenarios under `scenarios/` and
-  `calibration/`. Click a name to edit; click `+ New Scenario` to create.
+**Recent Runs** (left) — every simulation you've run. Each row has a
+REPLAY link (opens the analysis view) and an EVAL link (opens the scorecard).
 
-Five scenarios ship in the repo:
+**Scenario Library** (right) — ready-made scenarios you can run with one
+click, or use as templates. The defaults:
 
-| Scenario | Purpose |
+| Name | What it tests |
 |---|---|
-| `quiet_market` | No news, 240 steps — baseline behavior |
-| `fed_hawkish` | Single bearish macro event at step 50 |
-| `kol_pump` | KOL announces BTC buy → mainstream adoption story |
-| `live_today` | Live prices + live news from CryptoPanic, 60 steps |
-| `llm_quick_demo` | 30 steps × 40 agents, LLM-backed — fast narrative demo |
-| `luna_depeg` (calibration) | 2022-05-07 historical replay of UST depeg |
+| `quiet_market` | Baseline — no news, just organic trading. Useful as a control. |
+| `fed_hawkish` | A single bearish macro announcement. How do prices react to a surprise rate hike? |
+| `kol_pump` | A KOL announces a $10M BTC buy. Does it pump? How fast does it spread? |
+| `live_today` | Real live prices + real news from the last 24 hours. "What would today look like?" |
+| `llm_quick_demo` | 40 agents, 30 steps, fast — best for seeing the system come alive. |
+| `luna_depeg` (calibration) | Replays the UST stablecoin depeg of May 2022. Used to validate the sim against real history. |
 
-### Scenario builder
+Click **+ New Scenario** (top right) to build your own.
+
+---
+
+## Building a scenario
 
 ![Scenario builder](docs/screenshots/02-scenario-builder.png)
 
-The form covers everything needed to define a run:
+### The basics
 
-- **Configuration**: name, duration in steps, step length in minutes, seed,
-  agent count
-- **LLM agents toggle**: OFF (free, heuristic) or ON (paid, real narrative
-  content). When ON, a live cost + wall-time estimate appears:
-  `~$36 USD · ~8 min (5% active rate, claude-sonnet-4-6)`
-- **Assets**: toggle which of BTC/ETH/USDT/XAU/WTI/USD the sim trades
-- **Price source**: default seeded prices, live Binance/yfinance snapshot,
-  historical as-of-date, or fully manual override
-- **News source**: see below
-- **Population mix**: 10 archetype sliders that must sum to 100%
+- **Name** — whatever you want to call it.
+- **Duration (steps)** — how long the sim runs. Each step is 1 minute of
+  simulated market time. 240 steps = a 4-hour trading window.
+- **Seed** — change this to get a different random path through the same
+  scenario. Same seed = same results every time.
+- **Agents** — how many trader-agents participate. 100 is fast and
+  readable; 1,000 gives more realistic order-book depth; 10,000 for
+  calibration work.
 
-Two actions at the top right:
+### The LLM toggle (important)
 
-- **SAVE** writes the YAML to `scenarios/` (or updates the existing file
-  in-place if editing)
-- **RUN** saves and immediately launches a subprocess, navigating you to the
-  live view
+**OFF (default):** Agents act on heuristic rules. Fast — a 240-step run
+finishes in about 30 seconds. **Free.** Good for quick iteration and
+testing scenario setup.
 
-### News source editor
+**ON:** Agents use Claude to *actually think* about news, their
+personality, and market state. Posts are written in their own voice,
+trades come from reasoning. A live cost and time estimate appears next
+to the toggle as you change duration and agent count.
+
+Rule of thumb for demos: keep it **OFF**. Turn it **ON** when you
+specifically want realistic narrative — agent posts, social propagation,
+behaviorally-driven price moves.
+
+### Assets
+
+Toggle which of **BTC, ETH, USDT, XAU (gold), WTI (oil), USD** are
+active. USD is always the quote currency. USDT is pegged unless you
+manually override it (useful for depeg scenarios).
+
+### Price source
+
+- **Default** — nice round seeded prices (BTC $80k, ETH $3.5k, etc.)
+- **Live** — pulls the current market price when the run starts
+- **Historical** — pulls prices from a specific past date (e.g., start
+  the sim at Luna-depeg-day prices)
+- **Manual** — type in whatever starting prices you want
+
+### News source
 
 ![News editor](docs/screenshots/03-news-editor.png)
 
-Three modes, each with a plain-language description card:
+Three modes, each explained inline on the card:
 
-- **MANUAL** — you define every event yourself. Good for hypotheticals.
+- **MANUAL** — you write the headlines yourself on a timeline.
 - **HISTORICAL** — fetches real news from CryptoPanic for a past date range.
-  Used for calibration scenarios like `luna_depeg`.
-- **LIVE SNAPSHOT** — fetches news from the last N hours. "What if this
-  news dropped in the simulation today?"
+- **LIVE SNAPSHOT** — fetches real news from the last N hours.
 
-Each timeline event is a labeled card with:
+Each timeline event has:
 
-- **Step** — which simulation tick the event fires on (step 50 at 1min/step
-  = 50 minutes into the sim)
-- **Audience** — who sees the event first. Choices: `all` (broadcast),
-  `news_traders`, `kols`, `crypto_natives`, `whales`. Events then propagate
-  through the social graph based on audience → follower edges → reactions.
-- **Headline / content** — text the agents see
-- **Sentiment** — slider from −1 (very bearish) to +1 (very bullish). Drives
-  the stimulus signal into the agent gate
-- **Affected assets** — chip toggles for BTC / ETH / USDT / XAU / WTI.
+- **Step** — when the news breaks (step 50 = 50 minutes into the sim).
+- **Audience** — who sees it first. `all` means broadcast; `kols` means
+  it leaks to the influencers first and propagates from there. This is
+  the key knob for studying narrative diffusion.
+- **Headline / content** — the text agents read.
+- **Sentiment** — a slider from −1 (max bearish) to +1 (max bullish).
+  The slider is color-coded BULL/NEUT/BEAR so you don't have to guess.
+- **Affected assets** — toggle chips for BTC / ETH / USDT / XAU / WTI.
   Agents holding these react more strongly.
 
-In HISTORICAL and LIVE_SNAPSHOT modes, the timeline editor is still
-available as a "Manual Overlay" so you can add hypothetical events on top
-of real news.
+You can mix modes: e.g. start with real news from yesterday and layer
+one hypothetical "what if the Fed pauses at step 100" event on top.
 
-### Run / Replay view
+### Population mix
+
+Ten sliders — the archetypes that make up your sim population. They
+must sum to 100%.
+
+| Archetype | What they do |
+|---|---|
+| **Lurker** | Watches, rarely acts. Most of the crowd. |
+| **HODLer** | Long conviction, holds through drawdowns. |
+| **Paperhands** | Panic-sells on bad news. |
+| **FOMO Degen** | Chases pumps, buys the top. |
+| **TA** | Trades off technical signals. |
+| **Contrarian** | Buys fear, sells greed. |
+| **News Trader** | Reacts fast to headlines. |
+| **Whale** | Big capital, slow-moving, patient. |
+| **KOL** | Influencer — posts a lot, has followers. |
+| **Market Maker** | Quotes both sides, provides liquidity. |
+
+The default mix (45% Lurker, 15% HODLer/Paperhands, small whale/KOL
+tails) matches the real-world social-media rule-of-thumb that 90% lurk,
+9% engage, 1% drive. Tweak to test edge cases — *"what if half the
+population were FOMO degens?"* is one slider away.
+
+### Running it
+
+- **SAVE** — stores the scenario so you can come back later.
+- **RUN** — saves and launches immediately. You're taken to the live
+  view while the run progresses.
+
+---
+
+## Watching a run
 
 ![Replay view](docs/screenshots/04-replay-view.png)
 
-This is the hero view. The layout is a 4-column grid:
+This is the main analysis view. Lots of panels — here's what each one
+tells you:
 
-**Top bar**
+### Top bar
 
-- DeSimulator wordmark (links to Defily)
-- Live ticker with % change per asset
-- UTC clock
+Five-asset ticker with today's % change, live UTC clock, and the
+DeSimulator wordmark linking to Defily. Think of it as your status line.
 
-**Left rail**
+### Playback controls (just under the header)
 
-- **Simulation** — scenario name, seed, step progress, status, elapsed time
-- **Persona Distribution** — how many of each archetype were sampled for
-  this run
-- **Tier Distribution** — at the current step, what fraction of agents are
-  Silent / React / Comment / Post / Trade. Silent dominates (~87%) in any
-  realistic run — this matches social media's 1-9-90 rule.
-- **Stimulus Weights** — the relative contribution of each stimulus source
-  (price move, news events, follow-graph activity, mentions, personal
-  replies) driving agent activity
+- **PLAY / PAUSE** — step through the simulation
+- **1x / 10x / 100x** — playback speed
+- **Scrubber** — click or drag anywhere on the timeline; all panels
+  snap to that moment
 
-**Center**
+### Left rail — "who's in the sim and what's pushing them"
 
-- **Price chart** — per-asset line. Tab between BTC / ETH / USDT / XAU /
-  WTI. News events render as dotted vertical lines on the chart.
-- **Social graph** — force-directed visualization of 100–10,000 agents
-  colored by archetype. Nodes pulse when their agent posts; edges are
-  follow relationships. Scroll to zoom, drag to pan.
+- **Simulation** — the scenario name, seed, current step, status
+- **Persona Distribution** — how many of each archetype got sampled
+  for this run
+- **Tier Distribution** — at the current moment, what fraction of
+  agents are silent vs reacting vs commenting vs posting vs trading.
+  ~87% silent in a quiet market is *normal* — real social media
+  follows the 1-9-90 rule.
+- **Stimulus Weights** — what's driving agents to act right now.
+  If "News" is at 80%, a recent event is the dominant signal; if
+  "Price" is high, agents are reacting to portfolio moves. Useful
+  for asking "why did the market just spike?"
 
-**Right rail**
+### Center — "what's actually happening in the market"
 
-- **Order Book** — L2 depth for the selected pair, bids green, asks red
-- **News Feed** — scenario-injected events with sentiment badges
-- **Agent Feed** — streaming list of agent actions (buys, posts, likes)
-- **Forecast** — ensemble outcome band across N seed runs (when eval runs
-  are available)
+- **Price Chart** — one line per asset. Tabs at the top to switch
+  between BTC / ETH / USDT / XAU / WTI.
+- **Social Graph** — a force-directed "web" of agents, colored by
+  archetype. When an agent posts, their node pulses. When info
+  propagates along follow-edges, you see the cascade ripple through
+  the graph in real time. This is the payoff visualization — no
+  other crypto sim shows this.
 
-**Bottom row**
+### Right rail — "live market microstructure"
 
-- **PnL History** — aggregate wealth across all agents over time, priced at
-  each step's last price
-- **Recent Trades** — tape of filled trades with BUY/SELL chips colored by
-  aggressor side
-- **Eval Preview** — 3-tier score vector snapshot. Click "Open full eval"
-  for the complete report.
+- **Order Book** — L2 bids (green) and asks (red) for the selected
+  pair. Spread shown between. Tightens when MMs are active.
+- **News Feed** — every scenario-injected event with a sentiment
+  badge (BULL / NEUT / BEAR) and source tag.
+- **Agent Feed** — streaming list of every agent action, colored
+  by type (PLACE_ORDER, CREATE_POST, LIKE_POST, …). Auto-scrolls;
+  if you scroll up to read something, auto-scroll pauses until you
+  come back to the bottom.
+- **Forecast** — ensemble outcome across multiple seed runs
+  (populated after running eval).
 
-**Social Feed** (full-width, bottom of page)
+### Bottom row — "zoom out"
 
-Every agent post with archetype-colored handle, post content, nested
-comments (up to 5 per post), like/dislike tallies. In LLM mode this is
-where the sim's narrative shines — real in-voice posts from FOMO degens,
-KOLs writing threads, whales dropping one-liners.
+- **PnL History** — aggregate wealth of all agents combined,
+  priced at each step's market price. Tracks how the total pie
+  changes as the market moves.
+- **Recent Trades** — tape of filled trades with green BUY / red
+  SELL chips.
+- **Eval Preview** — three scorecard tiers. Click "Open full eval
+  page" for the complete scorecard.
 
-**Scrubber controls** (top of replay)
+### Social Feed (bottom, full-width)
 
-- PLAY / PAUSE button
-- Speed: 1x / 10x / 100x
-- Step slider — click or drag to any point in the run. All panels sync to
-  the selected step.
-
-### God-mode news injection (live runs)
-
-While a simulation is running, you can inject a news event via the API:
-
-```bash
-curl -X POST http://localhost:8000/api/runs/{run_id}/inject-news \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "SEC approves spot ETF",
-    "content": "Major regulatory milestone for crypto markets.",
-    "sentiment_valence": 0.9,
-    "affected_assets": ["BTC", "ETH"],
-    "audience": "all",
-    "magnitude": "critical",
-    "credibility": "confirmed"
-  }'
-```
-
-The event fires at the next simulation step. Agents react within a few
-steps; the social feed reflects propagation in real time.
-
-### Eval mode
-
-For any completed run:
-
-```bash
-~/venvs/aragen/bin/python scripts/evaluate.py \
-    results/run_<id>/ \
-    --mode historical
-```
-
-Produces `eval_report.html` + `eval_report.md` + `eval_report.json` in the
-run directory. Three modes:
-
-- **historical** — compares sim to real prices + real news (via Binance,
-  yfinance, Fear & Greed Index, CryptoPanic)
-- **sanity** — no ground truth available; scores against baselines
-  (random_walk, constant, replay, no_news, shuffled_news, …)
-- **stress** — stress tests per archetype
-
-The report covers six metric tiers: price path, style facts (kurtosis, vol
-clustering), microstructure, cross-asset correlations, social volume,
-agent-level P&L.
+Every agent post with their handle, archetype, content, nested
+comments, likes. In LLM mode this reads like a real crypto Twitter
+timeline — FOMO degens with rocket emoji, KOLs writing threads,
+whales dropping terse one-liners. Scroll freely; the feed won't
+hijack your position.
 
 ---
 
-## Cost and performance
+## God-mode: inject news while a run is live
 
-At the default **240 steps × 1000 agents**:
+While a simulation is still running, you can drop a breaking-news
+headline into the feed and watch the agents react. Useful for
+stress-testing ("what if the SEC approves an ETF *right now*?").
+
+Ask your admin to wire this up for you — it's available, just not
+exposed as a button in the UI yet.
+
+---
+
+## Costs and run times
+
+Rough guide at the default **240 steps × 1,000 agents**:
 
 | Mode | Wall clock | API cost |
 |---|---|---|
-| Gate-only | ~30 seconds | $0 |
-| LLM (gpt-4o-mini) | ~8 minutes | ~$1–5 |
-| LLM (claude-sonnet-4-6) | ~15 minutes | ~$30–50 |
+| Gate-only (heuristic) | **~30 seconds** | **$0** |
+| LLM (gpt-4o-mini) | ~8 minutes | ~$1 – $5 |
+| LLM (Claude Sonnet 4.6) | ~15 minutes | ~$30 – $50 |
 
-The scenario builder shows a live cost + time estimate as you change
-duration and agent count.
+**The cost estimate in the scenario builder updates live** as you change
+duration and agent count, so you know what you're signing up for before
+clicking RUN.
 
-For quick iteration use `scenarios/llm_quick_demo.yaml` (30 steps × 40
-agents, ~2 min, ~$0.50).
-
----
-
-## Where things live
-
-```
-oasis/crypto/           — simulation engine (matching, personas, gate, harness)
-oasis/crypto/eval/      — metrics, baselines, ground truth
-scenarios/              — YAML scenarios
-calibration/            — historical replay scenarios
-scripts/                — run_scenario.py, evaluate.py, generate_personas.py
-ui/backend/             — FastAPI server
-ui/frontend/            — Next.js terminal UI
-data/personas/          — archetype templates + generated library
-results/                — every run's parquet outputs + simulation.db
-```
-
-Run telemetry lands in `results/run_<id>/` as:
-
-- `actions.parquet` — every agent action per step
-- `trades.parquet` — every filled trade
-- `prices.parquet` — per-step OHLC + volume per pair
-- `tiers.parquet` — tier distribution per step
-- `stimuli.parquet` — per-agent stimulus components per step
-- `conservation.parquet` — aggregate balance checks per step
-- `news.parquet` — injected news events (only when scenario has any)
-- `simulation.db` — SQLite mirror of everything above, plus social graph,
-  posts, comments
+For fast iteration: use gate-only mode. For a real narrative demo: use
+the `llm_quick_demo` scenario — 40 agents × 30 steps, about $0.50 and
+2 minutes.
 
 ---
 
-## Common tasks
+## Tips
 
-### Run a gate-only scenario from the CLI
-
-```bash
-~/venvs/aragen/bin/python scripts/run_scenario.py \
-    scenarios/kol_pump.yaml --no-llm --seed 42
-```
-
-### Run an LLM-backed scenario via the UI
-
-1. Home → `+ New Scenario`
-2. Configure, **check LLM agents toggle**
-3. Click RUN
-4. You're redirected to the live view, which streams step-by-step
-   telemetry until the run completes, then auto-switches to replay
-
-### Generate a fresh 10k persona library (one-time, ~$30)
-
-```bash
-~/venvs/aragen/bin/python scripts/generate_personas.py \
-    --count 10000 \
-    --output data/personas/library.jsonl \
-    --seed 42
-```
-
-Scenarios automatically fall back to `library_smoke_100.jsonl` (100
-persona smoke library, already committed) when the full library isn't
-present, so this is optional.
+- **Start with `llm_quick_demo`** if you're new. It runs in 2 minutes
+  and produces rich in-voice agent posts so you can see the narrative
+  engine working.
+- **Use the same seed** when comparing scenarios. Change *one thing*
+  (news timing, audience, population mix) and compare — that's the
+  cleanest way to learn what each knob does.
+- **Watch the Social Feed during replay.** That's where you see
+  sentiment form. A KOL post at step 20 → followers reposting at
+  step 22 → FOMO degens piling in at step 25 → price top at step
+  30. The narrative chain is visible.
+- **Trust gate-only for "does the scenario setup make sense," not
+  for "will this market actually behave this way."** Real price
+  dynamics need LLM agents. Gate-only is a smoke test, not a
+  forecast.
+- **Try god-mode during a live run.** Run a long gate-only scenario,
+  then mid-sim inject a surprise headline. Watch the social feed
+  and order book react. This is the single most fun feature once
+  you're familiar with the UI.
 
 ---
 
-## Troubleshooting
+## Quick troubleshooting
 
-- **"WebSocket closed before connecting"** — you're on `/run/{id}`
-  (live view) for a completed run. Navigate to `/run/{id}/replay` instead;
-  the UI will auto-redirect for you on fresh clicks.
-- **"Cannot find module './687.js'"** — Next.js dev cache corruption
-  after mixing `pnpm build` and `pnpm dev`. Fix:
-  `rm -rf ui/frontend/.next && pnpm run dev`
-- **API key error in subprocess** — ensure `.env` exists at repo root
-  and contains `ANTHROPIC_API_KEY=...`. Both the backend and
-  `scripts/run_scenario.py` load `.env` at startup.
-- **No trades / no stimulus / empty panels** — try a fresh run. Older runs
-  (before recent telemetry fixes) may have empty `stimuli.parquet` or
-  `tiers.parquet`.
+- **Charts show `0%` everywhere** — you're looking at a run from
+  before we fixed the telemetry. Fire a fresh run; the new one will
+  populate correctly.
+- **Page shows "WebSocket closed"** — you clicked a link to a
+  completed run via the live URL. Refresh, or go back to Home and
+  click REPLAY instead of the Run ID.
+- **LLM run cost seems too high** — the estimate next to the LLM
+  toggle uses your current duration × agent count × 5% active rate
+  × $0.003/call. Turn down agents or shorten duration to cut cost
+  proportionally.
+- **Nothing's happening on screen** — a fresh LLM run takes a minute
+  before the first action shows up (agents are thinking). Watch the
+  Agent Feed; the first few entries will start streaming once step 1
+  completes.
 
 ---
 
-## License
+## What you can actually do with this
 
-Apache 2.0 (inherits from CAMEL-AI/OASIS).
+1. **Stress-test narratives.** Got a thesis like "a rate cut will
+   pump BTC 5%"? Build the scenario, run 10 seeds, see how often the
+   sim agrees.
+2. **Explore contagion.** A USDT depeg scenario lets you see how
+   stablecoin stress propagates into BTC and ETH holdings across
+   agents with different risk profiles.
+3. **Study KOL influence.** Run the same news event with audience
+   = `kols` vs `all` vs `whales`. Watch the difference in how fast
+   the price moves and how the post pattern differs.
+4. **Compare agent-population compositions.** What does a 50%-
+   paperhands market look like vs a 50%-HODLer one, with the same
+   news? Both feel very different in practice.
+5. **Replay historical events.** Start the sim at 2022-05-07
+   prices with the Luna-depeg calibration scenario; does the sim
+   reproduce the real-world cascade?
+
+Every one of these is a point-and-click workflow. The tool is
+designed so you spend your time asking interesting market
+questions, not wrangling configuration.
+
+---
+
+*Built by [Defily](https://www.defily.ai/) · DeSimulator, 2026*
