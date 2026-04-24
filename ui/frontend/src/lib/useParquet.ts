@@ -36,11 +36,21 @@ export function useParquet(
       cache: "no-store",
     })
       .then((res) => {
+        // Many parquet sections (news, trades, orders) are optional —
+        // the writer skips them when there are zero rows to emit. A 404
+        // here means "no data for this section," not a real error.
+        if (res.status === 404) {
+          if (!cancelled) {
+            setRows([]);
+            setLoading(false);
+          }
+          return null;
+        }
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         return res.json() as Promise<ParquetResponse>;
       })
       .then((data) => {
-        if (!cancelled) {
+        if (!cancelled && data) {
           setRows(data.rows);
           setLoading(false);
         }

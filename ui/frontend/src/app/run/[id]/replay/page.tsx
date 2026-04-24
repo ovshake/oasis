@@ -31,6 +31,10 @@ export default function ReplayPage() {
   const { rows: priceRows, loading: pricesLoading } = useParquet(runId, "prices");
   const { rows: actionRows, loading: actionsLoading } = useParquet(runId, "actions");
   const { rows: tradeRows, loading: tradesLoading } = useParquet(runId, "trades");
+  // news and conservation parquets are optional — useParquet returns []
+  // (not error) if the section doesn't exist for this run.
+  const { rows: newsRows } = useParquet(runId, "news");
+  const { rows: conservationRows } = useParquet(runId, "conservation");
 
   const bulkLoad = useRunStore((s) => s.bulkLoad);
   const reset = useRunStore((s) => s.reset);
@@ -148,6 +152,66 @@ export default function ReplayPage() {
       // Determine assets
       const assets = [...new Set(Object.keys(pricesByAsset))];
 
+      // News — filter to events with step <= current. Schema from
+      // news.parquet: step, source, title, sentiment_valence, audience,
+      // affected_assets (JSON array as string).
+      const news = newsRows
+        .filter((r) => ((r.step as number) ?? 0) <= step)
+        .map((r) => {
+          let parsedAssets: string[] = [];
+          const raw = r.affected_assets as string | string[] | undefined;
+          if (Array.isArray(raw)) parsedAssets = raw;
+          else if (typeof raw === "string") {
+            try {
+              parsedAssets = JSON.parse(raw) as string[];
+            } catch {
+              parsedAssets = raw.split(",").filter(Boolean);
+            }
+          }
+          return {
+            step: (r.step as number) ?? 0,
+            title: (r.title as string) ?? "",
+            content: (r.content as string) ?? "",
+            source: (r.source as string) ?? "",
+            sentiment: (r.sentiment_valence as number) ?? 0,
+            assets: parsedAssets,
+          };
+        });
+
+      // PnL — aggregate wealth at last_price across all instruments.
+      // Conservation schema: step, instrument (or instrument_id), total_amount,
+      // total_locked, total_supply. Price lookup: last_price per
+      // (step, base_symbol) from priceRows.
+      const priceByStepSymbol = new Map<string, number>();
+      for (const row of priceRows) {
+        const s = (row.step as number) ?? 0;
+        const sym = (row.base_symbol as string) ?? "";
+        const lp = (row.last_price as number) ?? 0;
+        priceByStepSymbol.set(`${s}:${sym}`, lp);
+      }
+      const wealthByStep = new Map<number, number>();
+      for (const row of conservationRows) {
+        const s = (row.step as number) ?? 0;
+        if (s > step) continue;
+        const sym = (row.instrument as string) ?? (row.symbol as string) ?? "USD";
+        const amt = (row.total_amount as number) ?? 0;
+        const locked = (row.total_locked as number) ?? 0;
+        const qty = amt + locked;
+        // USD is its own unit; for base assets multiply by last_price at
+        // that step (fall back to latest known price, else 1).
+        let unitPrice = 1;
+        if (sym !== "USD") {
+          unitPrice =
+            priceByStepSymbol.get(`${s}:${sym}`) ??
+            priceByStepSymbol.get(`${step}:${sym}`) ??
+            0;
+        }
+        wealthByStep.set(s, (wealthByStep.get(s) ?? 0) + qty * unitPrice);
+      }
+      const pnl = [...wealthByStep.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([s, w]) => ({ step: s, wealth: w }));
+
       bulkLoad({
         currentStep: step,
         totalSteps: maxStep,
@@ -158,9 +222,11 @@ export default function ReplayPage() {
         cumulativeTierCounts,
         cumulativeArchetypeCounts,
         assets: assets.length > 0 ? assets : ["BTC"],
+        news,
+        pnl,
       });
     },
-    [priceRows, actionRows, tradeRows, maxStep, bulkLoad],
+    [priceRows, actionRows, tradeRows, newsRows, conservationRows, maxStep, bulkLoad],
   );
 
   // Update store when scrubber changes or data loads
