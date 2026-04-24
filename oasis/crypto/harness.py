@@ -375,11 +375,57 @@ class Simulation:
         self.conn.commit()
 
         # 3. Seed wallet balances
+        #
+        # Persona archetype YAMLs only populate USD in initial_holdings_dist.
+        # That leaves agents with zero base-asset inventory, so every SELL
+        # order they try to place fails on insufficient escrow and the order
+        # book accumulates bids only — no trades ever clear.
+        #
+        # Fix: after seeding from persona.initial_holdings, auto-convert a
+        # fraction of each agent's USD into base-asset inventory at current
+        # last_price. MMs need the most balanced inventory (they quote both
+        # sides every tick); HODLers and Whales also want base exposure; FOMO
+        # and paperhands are more cash-heavy by design. Total wealth at
+        # last_price is preserved — we debit USD and credit the base asset
+        # at the same dollar value, keeping conservation invariant.
+        _tradeable_bases = [
+            s for s, iid in self._instrument_id_by_symbol.items()
+            if s not in ("USD", "USDT")  # USD is quote, USDT is stablecoin
+            and self._pair_id_by_symbols.get((s, "USD")) is not None
+        ]
+        _base_fraction_by_archetype: dict[str, float] = {
+            "market_maker": 0.50,  # needs balanced inventory to quote both sides
+            "whale": 0.50,         # structurally dominant holders
+            "hodler": 0.60,        # hold-through-drawdown conviction
+            "ta": 0.30,
+            "contrarian": 0.30,
+            "news_trader": 0.20,
+            "fomo_degen": 0.20,    # chases momentum; mostly cash
+            "paperhands": 0.15,
+            "kol": 0.30,
+            "lurker": 0.10,
+        }
+
         for idx, persona in enumerate(self.personas):
             user_id = self.persona_idx_to_user_id[idx]
             holdings = dict(persona.initial_holdings)
             if self.config.initial_cash_override is not None:
                 holdings["USD"] = self.config.initial_cash_override
+
+            # Split USD into USD + equally-weighted base-asset inventory
+            usd_amount = float(holdings.get("USD", 0))
+            base_fraction = _base_fraction_by_archetype.get(persona.archetype, 0.20)
+            if usd_amount > 0 and _tradeable_bases and base_fraction > 0:
+                usd_to_convert = usd_amount * base_fraction
+                per_asset_usd = usd_to_convert / len(_tradeable_bases)
+                holdings["USD"] = usd_amount - usd_to_convert
+                for sym in _tradeable_bases:
+                    pair_id = self._pair_id_by_symbols[(sym, "USD")]
+                    last_price = self.exchange.pair_state(pair_id)["last_price"]
+                    if last_price and last_price > 0:
+                        qty = per_asset_usd / last_price
+                        holdings[sym] = holdings.get(sym, 0.0) + qty
+
             if holdings:
                 self.exchange.ensure_balances(user_id, holdings)
 

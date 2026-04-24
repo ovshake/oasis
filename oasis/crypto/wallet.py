@@ -91,15 +91,19 @@ class Wallet:
             raise ValueError(f"unlock qty must be non-negative, got {qty}")
         self._ensure_row(user_id, instrument_id)
         _, locked = self.get(user_id, instrument_id)
-        if locked < qty:
+        # Tolerate tiny float drift: qty of (price * quantity) may round
+        # differently than the value that was locked. We treat sub-1e-9
+        # overshoots as equal; clamp qty to locked to avoid going negative.
+        if qty > locked + 1e-9:
             raise ValueError(
                 f"Insufficient locked balance for unlock: user {user_id} "
                 f"instrument {instrument_id} has {locked} locked, need {qty}"
             )
+        effective = min(qty, locked)
         self.conn.execute(
             "UPDATE balance SET locked = locked - ?, amount = amount + ? "
             "WHERE user_id = ? AND instrument_id = ?",
-            (qty, qty, user_id, instrument_id),
+            (effective, effective, user_id, instrument_id),
         )
 
     def consume_locked(
@@ -112,15 +116,18 @@ class Wallet:
             )
         self._ensure_row(user_id, instrument_id)
         _, locked = self.get(user_id, instrument_id)
-        if locked < qty:
+        # Tolerate tiny float drift from separate multiplications of price
+        # and quantity at place-order vs. fill-settlement time.
+        if qty > locked + 1e-9:
             raise ValueError(
                 f"Insufficient locked balance for consume: user {user_id} "
                 f"instrument {instrument_id} has {locked} locked, need {qty}"
             )
+        effective = min(qty, locked)
         self.conn.execute(
             "UPDATE balance SET locked = locked - ? "
             "WHERE user_id = ? AND instrument_id = ?",
-            (qty, user_id, instrument_id),
+            (effective, user_id, instrument_id),
         )
 
     # ------------------------------------------------------------------
