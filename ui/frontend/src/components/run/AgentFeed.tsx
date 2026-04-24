@@ -3,13 +3,32 @@
 import { useEffect, useRef } from "react";
 import { useRunStore } from "@/lib/runStore";
 
-/** Live stream of agent actions. Auto-scrolls, capped at 200 rows. */
+/**
+ * Live stream of agent actions. Capped at 200 rows. Auto-scrolls the
+ * INTERNAL container only (never the page) and only when the user is
+ * already pinned to the bottom — preserves manual scroll position during
+ * replay playback.
+ */
 export function AgentFeed() {
   const actions = useRunStore((s) => s.actions);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Track whether the user is currently near the bottom (within 30px).
+  // Auto-scroll only applies in that case — otherwise we respect manual
+  // scroll position and never hijack the page scroll.
+  const stuckToBottomRef = useRef(true);
+
+  function onScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const distFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    stuckToBottomRef.current = distFromBottom < 30;
+  }
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = containerRef.current;
+    if (!el || !stuckToBottomRef.current) return;
+    // Scroll only within the container — never window.
+    el.scrollTop = el.scrollHeight;
   }, [actions.length]);
 
   return (
@@ -18,7 +37,11 @@ export function AgentFeed() {
       {actions.length === 0 ? (
         <p className="text-dim text-[10px]">Awaiting agent actions...</p>
       ) : (
-        <div className="max-h-48 overflow-y-auto text-[10px]">
+        <div
+          ref={containerRef}
+          onScroll={onScroll}
+          className="max-h-48 overflow-y-auto text-[10px]"
+        >
           {actions.map((a, i) => (
             <div
               key={`${a.step}-${a.agent_name}-${i}`}
@@ -36,7 +59,6 @@ export function AgentFeed() {
               </span>
             </div>
           ))}
-          <div ref={bottomRef} />
         </div>
       )}
     </div>
