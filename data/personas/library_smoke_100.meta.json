@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-04-24T06:08:42.873485+00:00",
+  "model": "claude-sonnet-4-6",
+  "count": 100,
+  "per_archetype": {
+    "contrarian": 10,
+    "fomo_degen": 10,
+    "hodler": 10,
+    "kol": 10,
+    "lurker": 10,
+    "market_maker": 10,
+    "news_trader": 10,
+    "paperhands": 10,
+    "ta": 10,
+    "whale": 10
+  },
+  "seed": 42,
+  "prompt_hash": "66927bd89e0b816d1862c1203becc728416038defaf2cfcf4336c39c5be1cf2c",
+  "total_input_tokens": 7397,
+  "total_output_tokens": 17613,
+  "estimated_cost_usd": 0.2864,
+  "validation_passed": true
+}
