@@ -302,6 +302,7 @@ def run_scenario(
     scenario_path: Path,
     no_llm: bool = False,
     seed_override: int | None = None,
+    output_dir_override: Path | None = None,
 ) -> dict:
     """Execute a full scenario run. Returns a summary dict."""
     t0 = time.perf_counter()
@@ -312,6 +313,10 @@ def run_scenario(
         scenario.seed = seed_override
     if no_llm:
         scenario.llm_enabled = False
+    if output_dir_override is not None:
+        # Override the scenario's YAML-templated output_dir so callers
+        # (e.g. the backend RunManager) control where artifacts land.
+        scenario.output_dir = str(output_dir_override)
 
     logger.info("Loaded scenario: %s (%d steps, %d agents)",
                 scenario.name, scenario.duration_steps, scenario.agents_count)
@@ -452,6 +457,13 @@ def main() -> None:
         default=False,
         help="Enable verbose logging.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Override the scenario's YAML output_dir (used by the backend "
+             "RunManager to align result paths to its registry).",
+    )
 
     args = parser.parse_args()
 
@@ -466,6 +478,7 @@ def main() -> None:
         scenario_path=args.scenario,
         no_llm=args.no_llm,
         seed_override=args.seed,
+        output_dir_override=args.output_dir,
     )
 
     # Print summary

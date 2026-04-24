@@ -93,6 +93,8 @@ class RunManager:
             str(scenario_path),
             "--seed",
             str(seed),
+            "--output-dir",
+            output_dir,
         ]
         if no_llm:
             cmd.append("--no-llm")
