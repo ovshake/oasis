@@ -102,3 +102,6 @@ tmp
 
 # Personal Claude Code config
 CLAUDE.local.md
+
+# Backend run state (not source)
+ui/backend/run_registry.json
