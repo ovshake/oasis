@@ -598,8 +598,25 @@ class Simulation:
 
         # Stage 3: Snapshot state (reads below see end-of-step-(N-1) state)
 
-        # Stage 4: Compute stimulus per agent (vectorized)
+        # Stage 4: Compute stimulus per agent (vectorized).
+        # At this point pair.last_price still reflects END of tick N-1
+        # (matching hasn't run yet this tick). pair.prev_close_price
+        # was captured at the same point of tick N-1 (so it represents
+        # END of tick N-2). Delta = price move DURING tick N-1. Valid
+        # non-zero signal once we're past the first tick.
         stimuli = self._compute_stimuli_batch(step, news_this_step)
+
+        # Roll last_price -> prev_close_price AFTER stimulus read but
+        # BEFORE matching. Captures end-of-tick-(N-1) price so next
+        # tick's stimulus has a usable pcp. Placing this at end of tick
+        # would be wrong because matching changes last_price — we want
+        # to snapshot BEFORE those changes.
+        for pid in self._pair_ids:
+            self.conn.execute(
+                "UPDATE pair SET prev_close_price = last_price WHERE pair_id = ?",
+                (pid,),
+            )
+        self.conn.commit()
 
         # Stage 5: Gate decides tier per agent (numpy-batched)
         tiers = self.gate.decide_tiers_batch(self.personas, stimuli)
@@ -691,6 +708,15 @@ class Simulation:
             if lp is not None and pcp is not None and pcp > 0:
                 delta = abs(lp - pcp) / pcp
                 price_stim = max(price_stim, delta)
+
+        # Cache the per-component values so _snapshot can write them
+        # faithfully to telemetry. Previously we only kept the scalar
+        # total and the stimuli.parquet's price_stimulus column was
+        # really the total — not useful for UI breakdown.
+        self._last_stim_components = {
+            "price": price_stim,
+            "news": news_val,
+        }
 
         stimuli: list[float] = []
         for _i in range(N):
@@ -1233,7 +1259,16 @@ class Simulation:
             })
         self.telemetry.record_actions(step, action_rows)
 
-        # Stimuli
+        # Stimuli — write the per-component values cached by
+        # _compute_stimuli_batch so the UI can render a correct
+        # breakdown (what share of stimulus came from price vs news).
+        # Previously price_stimulus was just the scalar total, which
+        # made it impossible to distinguish sources downstream.
+        components = getattr(
+            self, "_last_stim_components", {"price": 0.0, "news": 0.0}
+        )
+        price_stim = float(components.get("price", 0.0))
+        news_stim = float(components.get("news", 0.0))
         stim_rows: list[dict] = []
         for idx in range(len(self.personas)):
             user_id = self.persona_idx_to_user_id.get(idx)
@@ -1242,8 +1277,8 @@ class Simulation:
             s = stimuli[idx] if idx < len(stimuli) else 0.0
             stim_rows.append({
                 "user_id": user_id,
-                "price_stimulus": s,
-                "news_stimulus": 1.0 if (self._news_by_step.get(step) or self._fetch_news_for_step(step)) else 0.0,
+                "price_stimulus": price_stim,
+                "news_stimulus": news_stim,
                 "total_stimulus": s,
             })
         self.telemetry.record_stimuli(step, stim_rows)

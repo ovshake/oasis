@@ -35,6 +35,11 @@ export default function ReplayPage() {
   // (not error) if the section doesn't exist for this run.
   const { rows: newsRows } = useParquet(runId, "news");
   const { rows: conservationRows } = useParquet(runId, "conservation");
+  // Tiers and stimuli power the left-rail TierDist / StimulusWeights
+  // panels. tiers.parquet is the ONLY source that includes silent-tier
+  // counts (silent agents skip the LLM and don't appear in actions).
+  const { rows: tierRows } = useParquet(runId, "tiers");
+  const { rows: stimulusRows } = useParquet(runId, "stimuli");
 
   const bulkLoad = useRunStore((s) => s.bulkLoad);
   const reset = useRunStore((s) => s.reset);
@@ -45,6 +50,11 @@ export default function ReplayPage() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // StimulusWeights takes weights via prop, not the Zustand store. Hold
+  // the computed aggregate here in local state and pass it through.
+  const [stimulusWeights, setStimulusWeights] =
+    useState<Record<string, number> | undefined>(undefined);
 
   // Compute total steps from price data
   const maxStep = useMemo(() => {
@@ -115,17 +125,62 @@ export default function ReplayPage() {
       }
 
       // Cumulative counts
+      // Tier distribution comes from tiers.parquet (which records ALL
+      // 5 tier counts per step including silent). Using action_type
+      // from actions.parquet would miss silent agents entirely since
+      // they skip the LLM call and never produce an action row.
       const cumulativeTierCounts: Record<string, number> = {};
+      for (const row of tierRows) {
+        const s = (row.step as number) ?? 0;
+        if (s > step) continue;
+        const tier = (row.tier as string) ?? "";
+        const cnt = (row.count as number) ?? 0;
+        if (tier) {
+          cumulativeTierCounts[tier] = (cumulativeTierCounts[tier] ?? 0) + cnt;
+        }
+      }
       const cumulativeArchetypeCounts: Record<string, number> = {};
       for (const sd of stepMap.values()) {
-        for (const [k, v] of Object.entries(sd.tier_counts)) {
-          cumulativeTierCounts[k] = (cumulativeTierCounts[k] ?? 0) + v;
-        }
         for (const [k, v] of Object.entries(sd.archetype_counts)) {
           cumulativeArchetypeCounts[k] =
             (cumulativeArchetypeCounts[k] ?? 0) + v;
         }
       }
+
+      // Stimulus weights — show the RELATIVE share of each stimulus
+      // source cumulatively across the run up to currentStep. Sums to
+      // 1 (shown as 100% when scaled in the panel). "News" dominates
+      // on steps with news events; "Price" dominates on steps with
+      // big portfolio moves. follow/mention/personal are Phase 6
+      // info-filter stubs — always 0 for now.
+      const stimulusTotals: Record<string, number> = {
+        price: 0, news: 0, follow: 0, mention: 0, personal: 0,
+      };
+      for (const row of stimulusRows) {
+        const s = (row.step as number) ?? 0;
+        if (s > step) continue;
+        stimulusTotals.price += (row.price_stimulus as number) ?? 0;
+        stimulusTotals.news += (row.news_stimulus as number) ?? 0;
+        stimulusTotals.follow += (row.follow_stimulus as number) ?? 0;
+        stimulusTotals.mention += (row.mention_stimulus as number) ?? 0;
+        stimulusTotals.personal += (row.personal_stimulus as number) ?? 0;
+      }
+      const totalStim =
+        stimulusTotals.price +
+        stimulusTotals.news +
+        stimulusTotals.follow +
+        stimulusTotals.mention +
+        stimulusTotals.personal;
+      const stimulusWeights: Record<string, number> =
+        totalStim > 0
+          ? {
+              price: stimulusTotals.price / totalStim,
+              news: stimulusTotals.news / totalStim,
+              follow: stimulusTotals.follow / totalStim,
+              mention: stimulusTotals.mention / totalStim,
+              personal: stimulusTotals.personal / totalStim,
+            }
+          : {};
 
       // Trades — `side` is the aggressive (taker) side, derived in the
       // harness from order-id ordering. For the agent label, prefer the
@@ -225,8 +280,21 @@ export default function ReplayPage() {
         news,
         pnl,
       });
+      setStimulusWeights(
+        Object.keys(stimulusWeights).length > 0 ? stimulusWeights : undefined,
+      );
     },
-    [priceRows, actionRows, tradeRows, newsRows, conservationRows, maxStep, bulkLoad],
+    [
+      priceRows,
+      actionRows,
+      tradeRows,
+      newsRows,
+      conservationRows,
+      tierRows,
+      stimulusRows,
+      maxStep,
+      bulkLoad,
+    ],
   );
 
   // Update store when scrubber changes or data loads
@@ -329,7 +397,7 @@ export default function ReplayPage() {
           <SimMeta />
           <PersonaDist />
           <TierDist />
-          <StimulusWeights />
+          <StimulusWeights weights={stimulusWeights} />
         </div>
 
         <div className="xl:col-span-2 space-y-2">
