@@ -103,5 +103,23 @@ tmp
 # Personal Claude Code config
 CLAUDE.local.md
 
+# Next.js build and dependencies
+ui/frontend/.next/
+ui/frontend/node_modules/
+ui/frontend/next-env.d.ts
+ui/frontend/.turbo/
+
+# Python build artifacts
+*.egg-info/
+
+# Simulation outputs
+results/
+data/market/news_cache/
+data/market/price_cache/
+data/market/ground_truth/cache/
+
+# Background command artifacts
+/tmp/phase*.log
+
 # Backend run state (not source)
 ui/backend/run_registry.json
