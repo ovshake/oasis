@@ -87,9 +87,20 @@ async def create_or_update_scenario(body: dict):
     if not safe_name:
         raise HTTPException(400, detail="Invalid scenario name")
 
-    target_dir = SCENARIO_DIRS[0]  # scenarios/
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{safe_name}.yaml"
+    # If the scenario already exists somewhere, update it IN PLACE — do NOT
+    # silently fork a duplicate into scenarios/. This prevents the React-key
+    # collision on the Home page AND prevents losing fields that only live in
+    # the original (e.g. calibration/ scenarios often have manual_events and
+    # initial_prices that the builder form doesn't round-trip perfectly).
+    existing = _find_scenario_path(safe_name)
+    if existing is not None:
+        target = existing
+        created = False
+    else:
+        target_dir = SCENARIO_DIRS[0]  # scenarios/ for brand-new scenarios
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{safe_name}.yaml"
+        created = True
 
     try:
         content = yaml.dump(body, default_flow_style=False, sort_keys=False)
@@ -97,7 +108,7 @@ async def create_or_update_scenario(body: dict):
     except Exception as exc:
         raise HTTPException(500, detail=str(exc))
 
-    return {"name": safe_name, "path": str(target), "created": not target.exists()}
+    return {"name": safe_name, "path": str(target), "created": created}
 
 
 @router.delete("/{name}")

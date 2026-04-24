@@ -171,7 +171,7 @@ export default async function HomePage() {
                 <tbody>
                   {scenarios.map((s) => (
                     <tr
-                      key={s.name}
+                      key={`${s.source_dir}/${s.name}`}
                       className="border-t border-border hover:bg-panel-alt transition-colors"
                     >
                       <td className="py-1.5 pr-3">
