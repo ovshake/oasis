@@ -107,13 +107,29 @@ def resolve_personas(
     library_path = _PROJECT_ROOT / scenario.persona_library
     mix = scenario.population_mix.to_dict()
 
+    # Fallback chain: configured path → smoke library → on-the-fly template gen
+    if not library_path.exists():
+        smoke_path = _PROJECT_ROOT / "data/personas/library_smoke_100.jsonl"
+        if smoke_path.exists():
+            logger.warning(
+                "Persona library not found at %s — falling back to smoke library at %s "
+                "(100 Sonnet-generated personas; sampled with replacement for "
+                "larger agents_count)",
+                library_path, smoke_path,
+            )
+            library_path = smoke_path
+
     if library_path.exists():
         library = PersonaLibrary.load_from_jsonl(library_path)
-        return library.sample(mix, scenario.agents_count, seed=scenario.seed)
+        # If library is smaller than agents_count, sample with replacement
+        return library.sample(
+            mix, scenario.agents_count, seed=scenario.seed,
+        )
 
-    # Fallback: generate from archetype templates
+    # Final fallback: generate from archetype templates
     logger.info(
-        "Persona library not found at %s, generating from templates", library_path
+        "No persona library available; generating %d personas on-the-fly from templates",
+        scenario.agents_count,
     )
     rng = np.random.default_rng(scenario.seed)
     personas: list[Persona] = []
