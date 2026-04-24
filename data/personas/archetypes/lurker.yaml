@@ -1,0 +1,59 @@
+archetype: lurker
+description: >-
+  Passive observer who rarely posts or trades. Reads feeds, absorbs sentiment,
+  but almost never acts. Represents the silent majority of any crypto community.
+voice_style_template: >-
+  Extremely terse if they ever post. One-word reactions. Lurks in silence.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.0
+  max: 0.3
+time_horizon_minutes:
+  kind: uniform
+  min: 1440
+  max: 10080
+social_sensitivity:
+  kind: uniform
+  min: 0.1
+  max: 0.4
+herding_coefficient:
+  kind: uniform
+  min: -0.1
+  max: 0.3
+capital_usd:
+  kind: loguniform
+  min: 100
+  max: 5000
+
+action_base_rates:
+  silent: 0.970
+  react: 0.019
+  comment: 0.005
+  post: 0.001
+  trade: 0.005
+
+target_follow_count:
+  kind: uniform
+  min: 1
+  max: 20
+
+follows_archetypes:
+  kol: 3.0
+  news_trader: 1.5
+  whale: 1.0
+  fomo_degen: 0.5
+  hodler: 0.3
+  ta: 0.2
+  contrarian: 0.1
+  paperhands: 0.1
+  market_maker: 0.0
+  lurker: 0.0
+
+hard_rules: []
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 100
+    max: 5000

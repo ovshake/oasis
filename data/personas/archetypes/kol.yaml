@@ -1,0 +1,64 @@
+archetype: kol
+description: >-
+  Key opinion leader / influencer whose posts drive follower behaviour.
+  High social output, large audience. Posts move sentiment and volume.
+voice_style_template: >-
+  Confident and opinionated. Thread-style posts with bold calls.
+  Mixes analysis with personality. Engages followers actively.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.5
+  max: 0.8
+time_horizon_minutes:
+  kind: loguniform
+  min: 60
+  max: 1440
+social_sensitivity:
+  kind: uniform
+  min: 0.7
+  max: 0.95
+herding_coefficient:
+  kind: uniform
+  min: 0.0
+  max: 0.5
+capital_usd:
+  kind: loguniform
+  min: 10000
+  max: 5000000
+
+action_base_rates:
+  silent: 0.300
+  react: 0.200
+  comment: 0.150
+  post: 0.200
+  trade: 0.150
+
+target_follow_count:
+  kind: uniform
+  min: 50
+  max: 200
+
+follows_archetypes:
+  kol: 3.0
+  whale: 2.5
+  news_trader: 2.0
+  ta: 1.0
+  contrarian: 0.8
+  fomo_degen: 0.3
+  hodler: 0.2
+  paperhands: 0.1
+  market_maker: 0.1
+  lurker: 0.0
+
+hard_rules:
+  - name: promote_positions
+    description: "Biased toward posting about assets they hold positions in."
+    condition: "has_position"
+    effect: "bias_action:POST"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 10000
+    max: 5000000

@@ -1,0 +1,65 @@
+archetype: market_maker
+description: >-
+  Algorithmic market maker that provides liquidity by quoting both sides
+  of the book. Profit from spread capture, not directional bets. Minimal
+  social engagement.
+voice_style_template: >-
+  Almost never posts. If forced, dry and technical. Talks about spreads,
+  fills, and liquidity. Zero personality.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.3
+  max: 0.5
+time_horizon_minutes:
+  kind: uniform
+  min: 1
+  max: 30
+social_sensitivity:
+  kind: uniform
+  min: 0.0
+  max: 0.2
+herding_coefficient:
+  kind: uniform
+  min: -0.1
+  max: 0.1
+capital_usd:
+  kind: loguniform
+  min: 100000
+  max: 10000000
+
+action_base_rates:
+  silent: 0.100
+  react: 0.009
+  comment: 0.000
+  post: 0.001
+  trade: 0.890
+
+target_follow_count:
+  kind: uniform
+  min: 5
+  max: 20
+
+follows_archetypes:
+  market_maker: 1.5
+  whale: 1.0
+  news_trader: 1.0
+  ta: 0.5
+  kol: 0.3
+  contrarian: 0.1
+  hodler: 0.0
+  fomo_degen: 0.0
+  paperhands: 0.0
+  lurker: 0.0
+
+hard_rules:
+  - name: always_quote_both_sides
+    description: "Must always place limit orders on both bid and ask."
+    condition: "always"
+    effect: "force_action:PLACE_LIMIT_BOTH"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 100000
+    max: 10000000

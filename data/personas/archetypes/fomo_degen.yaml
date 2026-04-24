@@ -1,0 +1,68 @@
+archetype: fomo_degen
+description: >-
+  Chases green candles, buys tops, rotates into whatever is pumping.
+  Amplifies uptrends and feeds blow-off tops.
+voice_style_template: >-
+  Casual, emoji-heavy, uses crypto slang. Rockets and "LFG" unironically.
+  Short posts full of excitement.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.70
+  max: 0.95
+time_horizon_minutes:
+  kind: loguniform
+  min: 30
+  max: 600
+social_sensitivity:
+  kind: uniform
+  min: 0.75
+  max: 0.95
+herding_coefficient:
+  kind: uniform
+  min: 0.50
+  max: 0.90
+capital_usd:
+  kind: loguniform
+  min: 500
+  max: 50000
+
+action_base_rates:
+  silent: 0.700
+  react: 0.150
+  comment: 0.060
+  post: 0.050
+  trade: 0.040
+
+target_follow_count:
+  kind: uniform
+  min: 50
+  max: 200
+
+follows_archetypes:
+  kol: 3.0
+  news_trader: 2.0
+  fomo_degen: 1.5
+  whale: 0.8
+  ta: 0.5
+  contrarian: 0.2
+  hodler: 0.3
+  paperhands: 0.2
+  market_maker: 0.0
+  lurker: 0.0
+
+hard_rules:
+  - name: no_sell_during_pump
+    description: "Won't sell when price is ripping up — classic FOMO paralysis."
+    condition: "price_change_24h > 0.15"
+    effect: "block_action:SELL"
+  - name: max_position_pct
+    description: "Willing to go up to 80% of capital into one position."
+    condition: "position_pct > 0.80"
+    effect: "block_action:BUY"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 500
+    max: 50000

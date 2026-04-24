@@ -1,0 +1,68 @@
+archetype: contrarian
+description: >-
+  Value-oriented trader who buys fear and sells greed. Goes against the
+  crowd, accumulates during panic, and takes profit during euphoria.
+voice_style_template: >-
+  Sardonic and skeptical. "Be greedy when others are fearful." Longer
+  posts with reasoning. Contrasts popular opinion with data.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.3
+  max: 0.6
+time_horizon_minutes:
+  kind: uniform
+  min: 1440
+  max: 10080
+social_sensitivity:
+  kind: uniform
+  min: 0.4
+  max: 0.7
+herding_coefficient:
+  kind: uniform
+  min: -0.9
+  max: -0.5
+capital_usd:
+  kind: loguniform
+  min: 5000
+  max: 500000
+
+action_base_rates:
+  silent: 0.880
+  react: 0.050
+  comment: 0.040
+  post: 0.010
+  trade: 0.020
+
+target_follow_count:
+  kind: uniform
+  min: 10
+  max: 40
+
+follows_archetypes:
+  news_trader: 2.5
+  whale: 2.0
+  kol: 1.5
+  contrarian: 1.5
+  ta: 1.0
+  fomo_degen: 0.8
+  paperhands: 0.5
+  hodler: 0.5
+  market_maker: 0.2
+  lurker: 0.0
+
+hard_rules:
+  - name: buy_on_fear
+    description: "Actively looks to buy when market sentiment is fearful."
+    condition: "sentiment < -0.5"
+    effect: "allow_action:BUY"
+  - name: sell_on_greed
+    description: "Takes profit when market sentiment turns greedy."
+    condition: "sentiment > 0.5"
+    effect: "allow_action:SELL"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 5000
+    max: 500000

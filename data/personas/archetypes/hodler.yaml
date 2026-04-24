@@ -1,0 +1,64 @@
+archetype: hodler
+description: >-
+  Long-term believer who buys and holds through volatility. Diamond hands
+  mentality. Rarely sells, especially during drawdowns. Accumulates on dips.
+voice_style_template: >-
+  Calm and conviction-driven. Uses phrases like "zoom out" and "stack sats."
+  Measured paragraphs, low emoji usage.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.2
+  max: 0.5
+time_horizon_minutes:
+  kind: loguniform
+  min: 10080
+  max: 525600
+social_sensitivity:
+  kind: uniform
+  min: 0.3
+  max: 0.6
+herding_coefficient:
+  kind: uniform
+  min: -0.3
+  max: 0.3
+capital_usd:
+  kind: loguniform
+  min: 1000
+  max: 100000
+
+action_base_rates:
+  silent: 0.900
+  react: 0.050
+  comment: 0.020
+  post: 0.010
+  trade: 0.020
+
+target_follow_count:
+  kind: uniform
+  min: 10
+  max: 50
+
+follows_archetypes:
+  hodler: 2.0
+  news_trader: 2.0
+  kol: 1.5
+  whale: 1.0
+  contrarian: 1.0
+  ta: 0.5
+  fomo_degen: 0.2
+  paperhands: 0.1
+  market_maker: 0.0
+  lurker: 0.0
+
+hard_rules:
+  - name: no_sell_drawdown
+    description: "Won't sell during a drawdown — true diamond hands."
+    condition: "drawdown_pct > 0.20"
+    effect: "block_action:SELL"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 1000
+    max: 100000

@@ -1,0 +1,64 @@
+archetype: whale
+description: >-
+  Large-capital holder whose trades move markets. Patient, strategic,
+  and information-advantaged. Single orders can shift price significantly.
+voice_style_template: >-
+  Rarely posts. When they do, it is measured and authoritative.
+  Short, declarative statements. No hype, no emoji.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.3
+  max: 0.6
+time_horizon_minutes:
+  kind: loguniform
+  min: 1440
+  max: 43200
+social_sensitivity:
+  kind: uniform
+  min: 0.2
+  max: 0.5
+herding_coefficient:
+  kind: uniform
+  min: -0.3
+  max: 0.3
+capital_usd:
+  kind: loguniform
+  min: 1000000
+  max: 100000000
+
+action_base_rates:
+  silent: 0.920
+  react: 0.030
+  comment: 0.020
+  post: 0.010
+  trade: 0.020
+
+target_follow_count:
+  kind: uniform
+  min: 5
+  max: 30
+
+follows_archetypes:
+  whale: 2.5
+  kol: 2.0
+  news_trader: 1.5
+  ta: 1.0
+  contrarian: 0.8
+  hodler: 0.3
+  fomo_degen: 0.1
+  paperhands: 0.0
+  market_maker: 0.5
+  lurker: 0.0
+
+hard_rules:
+  - name: avoid_small_trades
+    description: "Won't bother with trades below 0.1% of capital."
+    condition: "trade_size_pct < 0.001"
+    effect: "block_action:TRADE"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 1000000
+    max: 100000000

@@ -1,0 +1,64 @@
+archetype: news_trader
+description: >-
+  Reacts rapidly to breaking news, earnings, regulatory announcements,
+  and macro events. Speed is the edge — first to trade the headline.
+voice_style_template: >-
+  Urgent, headline-driven. "BREAKING:" prefixes. Short, factual posts
+  with quick takes. Links sources. Fast-paced commentary.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.5
+  max: 0.8
+time_horizon_minutes:
+  kind: loguniform
+  min: 60
+  max: 480
+social_sensitivity:
+  kind: uniform
+  min: 0.6
+  max: 0.9
+herding_coefficient:
+  kind: uniform
+  min: 0.2
+  max: 0.6
+capital_usd:
+  kind: loguniform
+  min: 5000
+  max: 500000
+
+action_base_rates:
+  silent: 0.750
+  react: 0.080
+  comment: 0.060
+  post: 0.050
+  trade: 0.060
+
+target_follow_count:
+  kind: uniform
+  min: 50
+  max: 300
+
+follows_archetypes:
+  news_trader: 3.0
+  kol: 2.5
+  whale: 2.0
+  ta: 1.0
+  contrarian: 0.8
+  fomo_degen: 0.5
+  hodler: 0.3
+  paperhands: 0.2
+  market_maker: 0.2
+  lurker: 0.0
+
+hard_rules:
+  - name: react_fast
+    description: "Prioritizes action when a news event fires this step."
+    condition: "news_event_this_step"
+    effect: "priority_action"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 5000
+    max: 500000

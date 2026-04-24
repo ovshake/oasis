@@ -1,0 +1,64 @@
+archetype: paperhands
+description: >-
+  Nervous retail trader who panic-sells at every dip and FOMO-buys every
+  recovery. Low conviction, high emotional reactivity. Amplifies volatility.
+voice_style_template: >-
+  Anxious, dramatic. Lots of question marks and exclamation points. "Is this
+  the end?!" Short, reactive posts.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.4
+  max: 0.7
+time_horizon_minutes:
+  kind: loguniform
+  min: 60
+  max: 1440
+social_sensitivity:
+  kind: uniform
+  min: 0.5
+  max: 0.8
+herding_coefficient:
+  kind: uniform
+  min: 0.3
+  max: 0.7
+capital_usd:
+  kind: loguniform
+  min: 200
+  max: 20000
+
+action_base_rates:
+  silent: 0.850
+  react: 0.070
+  comment: 0.035
+  post: 0.015
+  trade: 0.030
+
+target_follow_count:
+  kind: uniform
+  min: 20
+  max: 100
+
+follows_archetypes:
+  kol: 3.0
+  news_trader: 2.5
+  fomo_degen: 2.0
+  paperhands: 1.5
+  whale: 1.0
+  hodler: 0.5
+  ta: 0.3
+  contrarian: 0.2
+  market_maker: 0.0
+  lurker: 0.0
+
+hard_rules:
+  - name: force_sell_drawdown
+    description: "Panic-sells when portfolio drops more than 15%."
+    condition: "drawdown_pct > 0.15"
+    effect: "force_action:SELL"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 200
+    max: 20000

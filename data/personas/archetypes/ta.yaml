@@ -1,0 +1,64 @@
+archetype: ta
+description: >-
+  Technical analyst who trades based on chart patterns, RSI, moving averages,
+  and support/resistance levels. Disciplined, systematic, data-driven.
+voice_style_template: >-
+  Analytical and measured. Uses TA jargon: "RSI divergence," "double bottom,"
+  "retest of support." Posts charts and levels. Minimal emotion.
+
+risk_tolerance:
+  kind: uniform
+  min: 0.4
+  max: 0.7
+time_horizon_minutes:
+  kind: loguniform
+  min: 240
+  max: 2880
+social_sensitivity:
+  kind: uniform
+  min: 0.2
+  max: 0.5
+herding_coefficient:
+  kind: uniform
+  min: -0.3
+  max: 0.2
+capital_usd:
+  kind: loguniform
+  min: 2000
+  max: 200000
+
+action_base_rates:
+  silent: 0.800
+  react: 0.080
+  comment: 0.050
+  post: 0.030
+  trade: 0.040
+
+target_follow_count:
+  kind: uniform
+  min: 10
+  max: 50
+
+follows_archetypes:
+  ta: 2.5
+  whale: 1.5
+  news_trader: 1.0
+  contrarian: 1.0
+  kol: 0.8
+  hodler: 0.3
+  fomo_degen: 0.1
+  paperhands: 0.1
+  market_maker: 0.5
+  lurker: 0.0
+
+hard_rules:
+  - name: no_trade_without_signal
+    description: "Won't trade unless RSI or other indicator gives a signal."
+    condition: "abs(rsi_diff) < 0.3"
+    effect: "block_action:TRADE"
+
+initial_holdings_dist:
+  USD:
+    kind: loguniform
+    min: 2000
+    max: 200000
