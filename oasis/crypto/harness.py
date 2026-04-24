@@ -30,6 +30,77 @@ from oasis.crypto.telemetry import Telemetry
 
 logger = logging.getLogger(__name__)
 
+
+# Per-tier schema hints. Each block describes the EXACT JSON shape required
+# so the LLM returns a payload the harness can apply without a fallback to
+# DO_NOTHING. Critical for PLACE_ORDER — without side/price/quantity the
+# order never gets inserted.
+def _extract_action_json(resp: str) -> dict:
+    """Parse an LLM response into an action dict.
+
+    Tolerates markdown code fences, leading/trailing prose, and responses
+    that wrap the action in a larger JSON. Falls back to DO_NOTHING only
+    when no JSON object can be extracted.
+    """
+    if not resp:
+        return {"action_type": "DO_NOTHING"}
+    text = resp.strip()
+    # Strip common markdown fences
+    if text.startswith("```"):
+        # Remove opening fence (and optional language tag)
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        # Remove trailing fence
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3]
+        text = text.strip()
+    # Try direct parse first
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict) and "action_type" in obj:
+            return obj
+    except (json.JSONDecodeError, TypeError):
+        pass
+    # Fall back to extracting the first JSON object substring
+    first = text.find("{")
+    last = text.rfind("}")
+    if first >= 0 and last > first:
+        try:
+            obj = json.loads(text[first : last + 1])
+            if isinstance(obj, dict) and "action_type" in obj:
+                return obj
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {"action_type": "DO_NOTHING"}
+
+
+_ACTION_SCHEMA_HINTS_BY_TIER: dict[str, str] = {
+    "silent": '\nExample: {"action_type": "DO_NOTHING"}',
+    "react": (
+        '\nExample: {"action_type": "LIKE_POST"}'
+        '\nExample: {"action_type": "REPOST"}'
+    ),
+    "comment": (
+        '\nExample: {"action_type": "CREATE_COMMENT", '
+        '"content": "ngl this chart looks bullish af"}'
+    ),
+    "post": (
+        '\nExample: {"action_type": "CREATE_POST", '
+        '"content": "BTC holding 80k support — still accumulating"}'
+    ),
+    "trade": (
+        '\nFor PLACE_ORDER you MUST include: side ("buy"|"sell"), '
+        'symbol ("BTC"|"ETH"|"XAU"|"WTI"), price (float, USD), '
+        'quantity (float, base-asset units).'
+        '\nPrice should be within ±1%% of the current market price shown in '
+        'the market state. Quantity should be small (e.g. 0.0005-0.05 for '
+        'BTC) and consistent with your risk tolerance and holdings.'
+        '\nExample: {"action_type": "PLACE_ORDER", "side": "buy", '
+        '"symbol": "BTC", "price": 80120.0, "quantity": 0.001}'
+        '\nExample: {"action_type": "VIEW_PORTFOLIO"} (informational only)'
+        '\nExample: {"action_type": "VIEW_ORDER_BOOK", "symbol": "BTC"}'
+    ),
+}
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -647,21 +718,44 @@ class Simulation:
             tier = tiers[idx]
             user_id = self.persona_idx_to_user_id[idx]
 
-            # System prompt: persona card + allowed actions
+            # Resolve current holdings so the LLM knows what it can trade
+            holdings_lines: list[str] = []
+            for sym, iid in self._instrument_id_by_symbol.items():
+                amt, locked = self.exchange.wallet.get(user_id, iid)
+                tot = amt + locked
+                if tot > 0:
+                    holdings_lines.append(f"  {sym}: {tot:.6f}")
+            holdings_str = "\n".join(holdings_lines) or "  (none)"
+
+            # Action schema examples so the LLM returns parseable JSON with
+            # all required fields. Without this the LLM often returns
+            # {"action_type": "PLACE_ORDER"} with no side/price/quantity and
+            # the action silently becomes DO_NOTHING.
             allowed = ActionGate.allowed_actions(tier)
+            schema_hints = _ACTION_SCHEMA_HINTS_BY_TIER.get(tier.value, "")
+
             sys_p = (
-                f"You are {persona.name}, a {persona.archetype} crypto trader.\n"
+                f"You are @{persona.name}, a {persona.archetype} crypto trader.\n"
                 f"Voice: {persona.voice_style}\n"
-                f"Allowed actions this step: {allowed}\n"
-                f"Tier: {tier.value}\n"
-                f"Risk tolerance: {persona.risk_tolerance:.2f}\n"
-                f"Respond with a JSON object with 'action_type' and relevant fields."
+                f"Personality: risk_tolerance={persona.risk_tolerance:.2f}, "
+                f"social_sensitivity={persona.social_sensitivity:.2f}, "
+                f"herding={persona.herding_coefficient:+.2f}.\n"
+                f"\n"
+                f"Tier this step: {tier.value}. Allowed actions: {allowed}.\n"
+                f"{schema_hints}\n"
+                f"Output EXACTLY one JSON object with an 'action_type' field "
+                f"from the allowed list. No prose, no markdown fences."
             )
 
-            # User prompt: memory + market state
+            # User prompt: memory + market state + holdings
             mem_block = self.memory.build_prompt_block(user_id, step)
             market_info = self._build_market_info(step)
-            user_p = f"{mem_block}\n\nMarket state:\n{market_info}\n\nStep: {step}"
+            user_p = (
+                f"{mem_block}\n\n"
+                f"Market state:\n{market_info}\n\n"
+                f"Your holdings:\n{holdings_str}\n\n"
+                f"Step: {step}. Act in-character and return valid JSON."
+            )
 
             system_prompts.append(sys_p)
             user_prompts.append(user_p)
@@ -671,15 +765,12 @@ class Simulation:
             system_prompts, user_prompts
         )
 
-        # Parse responses
+        # Parse responses — be defensive about markdown fences and prose
+        # wrappers. LLMs sometimes return ```json\n{...}\n``` or add a
+        # leading sentence; strip/extract before json.loads.
         actions: list[dict] = []
         for resp in raw_responses:
-            try:
-                action = json.loads(resp)
-                if not isinstance(action, dict):
-                    action = {"action_type": "DO_NOTHING"}
-            except (json.JSONDecodeError, TypeError):
-                action = {"action_type": "DO_NOTHING"}
+            action = _extract_action_json(resp)
             actions.append(action)
 
         return actions

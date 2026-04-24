@@ -1,0 +1,50 @@
+name: llm_quick_demo
+duration_steps: 30
+step_minutes: 1
+seed: 42
+agents_count: 40
+assets: [BTC, ETH, USDT, XAU, WTI, USD]
+price_source: default
+as_of_date: null
+initial_prices: {}
+llm_enabled: true
+
+# Small mix — weighted toward the archetypes that produce interesting LLM
+# content. Lurker is capped because silent agents skip the LLM entirely
+# (no content generated) so they're dead weight in a demo.
+population_mix:
+  lurker: 0.20
+  hodler: 0.15
+  paperhands: 0.10
+  fomo_degen: 0.15
+  ta: 0.10
+  contrarian: 0.05
+  news_trader: 0.10
+  whale: 0.03
+  kol: 0.10
+  market_maker: 0.02
+
+news_source:
+  kind: manual
+  providers: []
+  date_range: null
+  lookback_hours: null
+  relevance_filter: {}
+  enrich_with: mock
+
+manual_events:
+  - step: 5
+    title: "KOL announces $10M BTC buy"
+    content: "Major crypto KOL posts thread about 10M BTC accumulation at current prices."
+    sentiment: 0.7
+    assets: [BTC]
+    audience: kols
+  - step: 15
+    title: "Fed hints at rate pause"
+    content: "Powell's remarks signal the Fed may pause hikes; risk-on narrative strengthens."
+    sentiment: 0.5
+    assets: [BTC, ETH, XAU]
+    audience: all
+
+persona_library: data/personas/library.jsonl
+output_dir: "results/{name}/{timestamp}"
