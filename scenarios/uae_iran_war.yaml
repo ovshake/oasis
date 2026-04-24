@@ -1,0 +1,36 @@
+name: uae_iran_war
+duration_steps: 6000
+step_minutes: 1
+seed: 42
+agents_count: 1000
+assets:
+- USDT
+- XAU
+- WTI
+- USD
+- BTC
+- ETH
+price_source: live
+as_of_date: null
+initial_prices: {}
+population_mix:
+  lurker: 0.45
+  hodler: 0.15
+  paperhands: 0.15
+  fomo_degen: 0.08
+  ta: 0.05
+  contrarian: 0.03
+  news_trader: 0.04
+  whale: 0.01
+  kol: 0.02
+  market_maker: 0.02
+news_source:
+  kind: manual
+  providers: []
+  enrich_with: mock
+manual_events:
+- step: 7
+  content: IRAN Attacks UAE
+  sentiment: 0
+  assets: []
+  audience: all

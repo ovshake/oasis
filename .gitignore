@@ -122,5 +122,9 @@ data/market/ground_truth/cache/
 # Background command artifacts
 /tmp/phase*.log
 
+# Playwright MCP working directory + stray debug screenshots
+.playwright-mcp/
+/*.png
+
 # Backend run state (not source)
 ui/backend/run_registry.json
