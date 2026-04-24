@@ -434,94 +434,226 @@ export function ScenarioForm({ initial, isNew }: Props) {
       {/* News source */}
       <section className="panel space-y-3">
         <h2 className="panel-title">News Source</h2>
-        <div className="flex flex-wrap gap-3 text-[11px]">
-          {(["manual", "historical", "live_snapshot"] as NewsKind[]).map(
-            (opt) => (
-              <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="news_kind"
-                  checked={form.news_kind === opt}
-                  onChange={() => setForm((p) => ({ ...p, news_kind: opt }))}
-                  className="accent-cyan"
-                />
-                <span className={form.news_kind === opt ? "text-text" : "text-dim"}>
-                  {opt.toUpperCase().replace("_", " ")}
-                </span>
-              </label>
-            )
-          )}
-        </div>
-        {form.news_kind === "manual" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-dim uppercase tracking-wider">
-                Timeline Events
-              </p>
-              <button
-                onClick={addNewsRow}
-                className="text-[10px] text-cyan hover:underline"
+        <p className="text-[10px] text-dim leading-relaxed">
+          Decide how news events enter the simulation. Each event raises
+          the stimulus score for its target audience, which makes those
+          agents more likely to act (trade / post / comment) that step.
+        </p>
+
+        {/* Mode cards — each radio is a labeled block with a short
+            description of what it does. Way clearer than a bare label. */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+          {(
+            [
+              {
+                value: "manual" as NewsKind,
+                title: "MANUAL",
+                desc: "You define events on a timeline. Good for hypotheticals and controlled experiments.",
+              },
+              {
+                value: "historical" as NewsKind,
+                title: "HISTORICAL",
+                desc: "Fetch real news from CryptoPanic for a past date range. Used for calibration.",
+              },
+              {
+                value: "live_snapshot" as NewsKind,
+                title: "LIVE SNAPSHOT",
+                desc: "Fetch news from the last N hours. 'What if this dropped today?' scenarios.",
+              },
+            ]
+          ).map((opt) => {
+            const selected = form.news_kind === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={`flex flex-col gap-1 p-2 border cursor-pointer transition-colors ${
+                  selected
+                    ? "border-cyan/60 bg-cyan/5"
+                    : "border-border hover:border-border-bright"
+                }`}
               >
-                + Add Event
-              </button>
-            </div>
-            {form.manual_events.length === 0 && (
-              <p className="text-dim text-[11px]">No events. Click + Add Event.</p>
-            )}
-            {form.manual_events.map((ev, i) => (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="news_kind"
+                    checked={selected}
+                    onChange={() =>
+                      setForm((p) => ({ ...p, news_kind: opt.value }))
+                    }
+                    className="accent-cyan"
+                  />
+                  <span className={`font-bold tracking-wider ${selected ? "text-cyan" : "text-text"}`}>
+                    {opt.title}
+                  </span>
+                </div>
+                <p className="text-[10px] text-dim leading-snug">{opt.desc}</p>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* Timeline events editor — always available when MANUAL, and as
+            an "overlay" in other modes (real news + hypothetical
+            injection). Uses per-event cards instead of a cramped row so
+            fields can be properly labeled. */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-dim uppercase tracking-wider">
+              {form.news_kind === "manual"
+                ? "Timeline Events"
+                : "Manual Overlay Events (optional)"}
+            </p>
+            <button
+              onClick={addNewsRow}
+              className="text-[10px] text-cyan hover:underline font-bold"
+            >
+              + Add Event
+            </button>
+          </div>
+
+          {form.manual_events.length === 0 && (
+            <p className="text-dim text-[11px]">
+              No events. Click{" "}
+              <span className="text-cyan">+ Add Event</span> to inject a
+              headline at a specific step.
+            </p>
+          )}
+
+          {form.manual_events.map((ev, i) => {
+            const sentLabel =
+              ev.sentiment > 0.2
+                ? "BULL"
+                : ev.sentiment < -0.2
+                  ? "BEAR"
+                  : "NEUT";
+            const sentColor =
+              ev.sentiment > 0.2
+                ? "text-bullish"
+                : ev.sentiment < -0.2
+                  ? "text-bearish"
+                  : "text-dim";
+            return (
               <div
                 key={i}
-                className="grid grid-cols-[60px_1fr_80px_100px_auto] gap-2 items-start text-[11px]"
+                className="relative border border-border bg-panel-alt p-3 space-y-2"
               >
-                <input
-                  type="number"
-                  value={ev.step}
-                  onChange={(e) => updateNewsRow(i, "step", Number(e.target.value))}
-                  placeholder="Step"
-                  className="input-field"
-                />
-                <input
-                  type="text"
-                  value={ev.content}
-                  onChange={(e) => updateNewsRow(i, "content", e.target.value)}
-                  placeholder="Event content..."
-                  className="input-field"
-                />
-                <input
-                  type="number"
-                  value={ev.sentiment}
-                  onChange={(e) =>
-                    updateNewsRow(i, "sentiment", Number(e.target.value))
-                  }
-                  placeholder="Sent."
-                  step="0.1"
-                  min={-1}
-                  max={1}
-                  className="input-field"
-                />
-                <input
-                  type="text"
-                  value={ev.assets.join(",")}
-                  onChange={(e) =>
-                    updateNewsRow(
-                      i,
-                      "assets",
-                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                    )
-                  }
-                  placeholder="BTC,ETH"
-                  className="input-field"
-                />
                 <button
                   onClick={() => removeNewsRow(i)}
-                  className="text-bearish hover:underline text-[10px] mt-1"
+                  aria-label={`Remove event ${i + 1}`}
+                  className="absolute top-2 right-2 text-[10px] text-bearish hover:bg-bearish/10 px-1.5 py-0.5 border border-bearish/30"
+                  title="Delete event"
                 >
                   DEL
                 </button>
+
+                {/* Step + Audience row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Step (when it fires)">
+                    <input
+                      type="number"
+                      value={ev.step}
+                      min={0}
+                      onChange={(e) =>
+                        updateNewsRow(i, "step", Number(e.target.value))
+                      }
+                      placeholder="e.g. 50"
+                      className="input-field"
+                    />
+                  </Field>
+                  <Field label="Audience (who sees it first)">
+                    <select
+                      value={ev.audience}
+                      onChange={(e) =>
+                        updateNewsRow(i, "audience", e.target.value)
+                      }
+                      className="input-field"
+                    >
+                      <option value="all">all (broadcast)</option>
+                      <option value="news_traders">news_traders</option>
+                      <option value="kols">kols</option>
+                      <option value="crypto_natives">crypto_natives</option>
+                      <option value="whales">whales</option>
+                    </select>
+                  </Field>
+                </div>
+
+                {/* Headline */}
+                <Field label="Headline / content">
+                  <input
+                    type="text"
+                    value={ev.content}
+                    onChange={(e) =>
+                      updateNewsRow(i, "content", e.target.value)
+                    }
+                    placeholder="e.g. Fed hints at rate pause — risk-on narrative strengthens"
+                    className="input-field"
+                  />
+                </Field>
+
+                {/* Sentiment slider */}
+                <div className="block space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-dim uppercase tracking-wider">
+                      Sentiment
+                    </label>
+                    <span className={`text-[10px] font-bold tabular-nums ${sentColor}`}>
+                      {ev.sentiment >= 0 ? "+" : ""}
+                      {ev.sentiment.toFixed(2)} · {sentLabel}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    value={ev.sentiment}
+                    onChange={(e) =>
+                      updateNewsRow(i, "sentiment", Number(e.target.value))
+                    }
+                    className="w-full accent-cyan h-1"
+                    aria-label="Sentiment (-1 bearish to +1 bullish)"
+                  />
+                  <div className="flex justify-between text-[9px] text-dim uppercase tracking-wider">
+                    <span className="text-bearish">bearish -1</span>
+                    <span>neutral 0</span>
+                    <span className="text-bullish">bullish +1</span>
+                  </div>
+                </div>
+
+                {/* Affected assets — chip toggles */}
+                <div className="block space-y-1">
+                  <label className="text-[10px] text-dim uppercase tracking-wider">
+                    Affected assets (agents holding these react strongly)
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ALL_ASSETS.filter((s) => s !== "USD").map((sym) => {
+                      const on = ev.assets.includes(sym);
+                      return (
+                        <button
+                          key={sym}
+                          type="button"
+                          onClick={() => {
+                            const nextAssets = on
+                              ? ev.assets.filter((a) => a !== sym)
+                              : [...ev.assets, sym];
+                            updateNewsRow(i, "assets", nextAssets);
+                          }}
+                          className={`px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+                            on
+                              ? "border-cyan/60 text-cyan bg-cyan/10"
+                              : "border-border text-dim hover:border-border-bright"
+                          }`}
+                        >
+                          {sym}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </section>
 
       {/* Population mix */}
