@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+# Load .env so ANTHROPIC_API_KEY propagates into os.environ and then into
+# every subprocess spawned by the RunManager. Harmless if .env is absent.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+except ImportError:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

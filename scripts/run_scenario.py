@@ -25,6 +25,14 @@ from pathlib import Path
 
 import yaml
 
+# Load .env before anything that might need ANTHROPIC_API_KEY / OPENAI_API_KEY.
+# Harmless if .env is absent — falls back to real os.environ.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+except ImportError:
+    pass
+
 # Ensure project root is on sys.path so imports work when running as a script
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
