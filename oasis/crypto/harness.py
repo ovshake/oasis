@@ -1082,8 +1082,12 @@ class Simulation:
         self.telemetry.record_prices(step, price_rows)
 
         # Trades
+        # Derive aggressive_side (taker side) from order ids: newer order_id
+        # = aggressor. This lets the UI render a real BUY/SELL tape instead
+        # of defaulting everything to "buy".
         trade_rows_db = self.conn.execute(
-            "SELECT trade_id, pair_id, price, quantity, buyer_id, seller_id "
+            "SELECT trade_id, pair_id, price, quantity, buyer_id, seller_id, "
+            "       buy_order_id, sell_order_id "
             "FROM trade WHERE step = ?",
             (step,),
         ).fetchall()
@@ -1095,6 +1099,7 @@ class Simulation:
                 "qty": r[3],
                 "buyer_id": r[4],
                 "seller_id": r[5],
+                "side": "buy" if r[6] > r[7] else "sell",
             }
             for r in trade_rows_db
         ]

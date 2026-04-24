@@ -123,7 +123,7 @@ export default function LiveRunPage() {
 
         {/* Column 4: Right sidebar — order book + feeds + god mode + forecast */}
         <div className="space-y-2">
-          <OrderBook />
+          <OrderBook runId={runId} />
           <NewsFeed />
           <AgentFeed />
           <GodMode runId={runId} />

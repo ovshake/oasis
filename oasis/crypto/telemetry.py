@@ -37,6 +37,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
         ("qty", pa.float64()),
         ("buyer_id", pa.int32()),
         ("seller_id", pa.int32()),
+        ("side", pa.string()),  # aggressive side: "buy" or "sell"
     ]),
     "orders": pa.schema([
         ("order_id", pa.int32()),

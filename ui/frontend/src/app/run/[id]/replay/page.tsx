@@ -122,17 +122,27 @@ export default function ReplayPage() {
         }
       }
 
-      // Trades
+      // Trades — `side` is the aggressive (taker) side, derived in the
+      // harness from order-id ordering. For the agent label, prefer the
+      // aggressor's user_id so the tape shows who drove the trade.
       const filteredTrades = tradeRows.filter(
         (r) => ((r.step as number) ?? 0) <= step,
       );
-      const trades: TradeRow[] = filteredTrades.map((r) => ({
-        step: (r.step as number) ?? 0,
-        side: ((r.side as string) ?? "buy") as "buy" | "sell",
-        price: (r.price as number) ?? 0,
-        qty: (r.qty as number) ?? 0,
-        user_name: (r.user_name as string) ?? "",
-      }));
+      const trades: TradeRow[] = filteredTrades.map((r) => {
+        const rawSide = r.side as string | undefined;
+        const side: "buy" | "sell" =
+          rawSide === "buy" || rawSide === "sell" ? rawSide : "buy";
+        const buyerId = (r.buyer_id as number) ?? 0;
+        const sellerId = (r.seller_id as number) ?? 0;
+        const aggressorUid = side === "buy" ? buyerId : sellerId;
+        return {
+          step: (r.step as number) ?? 0,
+          side,
+          price: (r.price as number) ?? 0,
+          qty: (r.qty as number) ?? 0,
+          user_name: `#${aggressorUid}`,
+        };
+      });
 
       // Determine assets
       const assets = [...new Set(Object.keys(pricesByAsset))];
@@ -261,7 +271,7 @@ export default function ReplayPage() {
         </div>
 
         <div className="space-y-2">
-          <OrderBook />
+          <OrderBook runId={runId} />
           <NewsFeed />
           <AgentFeed />
           <Forecast />

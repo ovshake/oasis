@@ -286,6 +286,95 @@ def _compute_next_step(conn: sqlite3.Connection) -> int:
     return 1
 
 
+@router.get("/{run_id}/orderbook")
+def get_orderbook(run_id: str, pair: str = "BTC/USD", depth: int = 10) -> dict:
+    """Return top-N bids and asks for a pair from the run's simulation.db.
+
+    For completed runs this reflects the final resting book. For running
+    runs it's a live snapshot. Used by the OrderBook panel in both
+    replay and live views.
+
+    Response: {
+      pair: "BTC/USD",
+      last_price: float,
+      bids: [{price, size, count}],   # descending price
+      asks: [{price, size, count}],   # ascending price
+      spread: float,
+    }
+    Aggregates same-price orders into levels.
+    """
+    mgr = RunManager.get()
+    info = mgr.get_run(run_id)
+    if info is None:
+        raise HTTPException(404, detail=f"Run '{run_id}' not found")
+
+    db_path = Path(info.output_dir) / "simulation.db"
+    if not db_path.exists():
+        raise HTTPException(404, detail="run not initialized")
+
+    base_sym, _, quote_sym = pair.partition("/")
+    if not base_sym or not quote_sym:
+        raise HTTPException(400, detail=f"bad pair format: {pair!r}")
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        pair_row = conn.execute(
+            """
+            SELECT p.pair_id, p.last_price
+            FROM pair p
+            JOIN instrument bi ON bi.instrument_id = p.base_instrument_id
+            JOIN instrument qi ON qi.instrument_id = p.quote_instrument_id
+            WHERE bi.symbol = ? AND qi.symbol = ?
+            """,
+            (base_sym, quote_sym),
+        ).fetchone()
+        if pair_row is None:
+            raise HTTPException(404, detail=f"pair {pair!r} not found")
+        pair_id, last_price = pair_row
+
+        # Aggregate remaining (unfilled) volume per price level for open orders.
+        bid_rows = conn.execute(
+            """
+            SELECT price,
+                   ROUND(SUM(quantity - filled_quantity), 8) AS size,
+                   COUNT(*) AS count
+            FROM crypto_order
+            WHERE pair_id = ? AND side = 'buy' AND status = 'open'
+            GROUP BY price
+            ORDER BY price DESC
+            LIMIT ?
+            """,
+            (pair_id, depth),
+        ).fetchall()
+        ask_rows = conn.execute(
+            """
+            SELECT price,
+                   ROUND(SUM(quantity - filled_quantity), 8) AS size,
+                   COUNT(*) AS count
+            FROM crypto_order
+            WHERE pair_id = ? AND side = 'sell' AND status = 'open'
+            GROUP BY price
+            ORDER BY price ASC
+            LIMIT ?
+            """,
+            (pair_id, depth),
+        ).fetchall()
+
+        bids = [{"price": r[0], "size": r[1], "count": r[2]} for r in bid_rows]
+        asks = [{"price": r[0], "size": r[1], "count": r[2]} for r in ask_rows]
+        spread = (asks[0]["price"] - bids[0]["price"]) if (bids and asks) else None
+
+        return {
+            "pair": pair,
+            "last_price": last_price,
+            "bids": bids,
+            "asks": asks,
+            "spread": spread,
+        }
+    finally:
+        conn.close()
+
+
 @router.post("/{run_id}/inject-news")
 def inject_news(run_id: str, body: NewsInjection) -> dict:
     """Insert a news_event row into the running simulation's DB.
