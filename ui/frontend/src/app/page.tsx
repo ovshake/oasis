@@ -88,6 +88,7 @@ export default async function HomePage() {
                     <th className="py-1 pr-3">Scenario</th>
                     <th className="py-1 pr-3">Status</th>
                     <th className="py-1 pr-3">Started</th>
+                    <th className="py-1 pr-3">Links</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -98,7 +99,11 @@ export default async function HomePage() {
                     >
                       <td className="py-1.5 pr-3 text-purple">
                         <Link
-                          href={`/run/${run.run_id}`}
+                          href={
+                            run.status === "running"
+                              ? `/run/${run.run_id}`
+                              : `/run/${run.run_id}/replay`
+                          }
                           className="hover:underline"
                         >
                           {run.run_id.slice(0, 8)}
@@ -110,6 +115,32 @@ export default async function HomePage() {
                       </td>
                       <td className="py-1.5 pr-3 text-dim">
                         {run.started_at ?? "--"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-[10px] space-x-2">
+                        {run.status === "running" && (
+                          <Link
+                            href={`/run/${run.run_id}`}
+                            className="text-cyan hover:underline"
+                          >
+                            LIVE
+                          </Link>
+                        )}
+                        {run.status === "completed" && (
+                          <>
+                            <Link
+                              href={`/run/${run.run_id}/replay`}
+                              className="text-warn hover:underline"
+                            >
+                              REPLAY
+                            </Link>
+                            <Link
+                              href={`/eval/${run.run_id}`}
+                              className="text-purple hover:underline"
+                            >
+                              EVAL
+                            </Link>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
