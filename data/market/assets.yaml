@@ -1,0 +1,50 @@
+assets:
+  - symbol: USD
+    name: US Dollar
+    asset_class: fiat
+    decimals: 2
+    is_quote_asset: 1
+    default_price: 1.0
+    peg_target: null
+    yfinance_ticker: null
+    binance_symbol: null
+  - symbol: BTC
+    name: Bitcoin
+    asset_class: crypto
+    decimals: 8
+    default_price: 80000.0
+    yfinance_ticker: BTC-USD
+    binance_symbol: BTCUSDT
+  - symbol: ETH
+    name: Ethereum
+    asset_class: crypto
+    decimals: 8
+    default_price: 3500.0
+    yfinance_ticker: ETH-USD
+    binance_symbol: ETHUSDT
+  - symbol: USDT
+    name: Tether
+    asset_class: stablecoin
+    decimals: 6
+    default_price: 1.0
+    peg_target: 1.0
+    yfinance_ticker: USDT-USD
+    binance_symbol: USDTUSDT  # note: USDT quoted vs USD is contrived; use for sim only
+  - symbol: XAU
+    name: Gold
+    asset_class: commodity
+    decimals: 4
+    default_price: 2400.0
+    yfinance_ticker: GC=F
+    binance_symbol: null
+  - symbol: WTI
+    name: WTI Crude Oil
+    asset_class: commodity
+    decimals: 2
+    default_price: 75.0
+    yfinance_ticker: CL=F
+    binance_symbol: null
+
+pair_defaults:
+  tick_size: 0.01
+  lot_size: 0.0001
