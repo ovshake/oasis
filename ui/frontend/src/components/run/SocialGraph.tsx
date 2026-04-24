@@ -180,9 +180,14 @@ export function SocialGraph({
     if (nodes.length < 1) return;
 
     const canvas = canvasRef.current;
+    const container = containerRef.current;
     if (!canvas) return;
-    const width = canvas.width;
-    const height = canvas.height;
+    // Prefer the container's actual rendered size — canvas HTML attrs may be
+    // stale (600x400) if ResizeObserver hasn't fired yet. This keeps nodes
+    // centered regardless of timing.
+    const rect = container?.getBoundingClientRect();
+    const width = rect && rect.width > 0 ? rect.width : canvas.width;
+    const height = rect && rect.height > 0 ? rect.height : canvas.height;
 
     // Build id lookup for forceLink
     const nodeById = new Map(nodes.map((n) => [n.user_id, n]));
@@ -351,7 +356,7 @@ export function SocialGraph({
   const isEmpty = !loading && !error && nodes.length < 5;
 
   return (
-    <div className="panel h-full flex flex-col">
+    <div className="panel flex flex-col">
       <div className="panel-title">
         <span className="live-dot">SOCIAL GRAPH</span>
         <span className="ml-auto text-dim text-[10px]">
@@ -373,15 +378,15 @@ export function SocialGraph({
           no graph data
         </div>
       )}
-      <div ref={containerRef} className="flex-1 w-full min-h-[300px] relative">
+      <div ref={containerRef} className="w-full h-[420px] relative">
         <canvas
           ref={canvasRef}
           width={600}
-          height={400}
+          height={420}
           className="absolute inset-0 w-full h-full"
         />
       </div>
-      <div className="flex gap-3 text-[10px] text-dim mt-1 flex-wrap">
+      <div className="flex gap-3 text-[10px] text-dim mt-2 flex-wrap">
         <LegendItem color="var(--color-bullish)" label="Whale/HODLer" />
         <LegendItem color="var(--color-purple)" label="KOL/Contrarian" />
         <LegendItem color="var(--color-warn)" label="FOMO" />
