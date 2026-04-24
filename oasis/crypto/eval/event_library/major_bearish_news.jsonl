@@ -1,0 +1,1 @@
+{"event_type": "major_bearish_news", "description": "Large-scale bearish event (regulation, hack, macro shock)", "peak_drawdown_p10": -0.22, "peak_drawdown_p50": -0.08, "peak_drawdown_p90": -0.03, "recovery_half_life_p50_steps": 720, "vol_spike_ratio_p50": 3.5, "post_volume_spike_p50": 5.0, "direction_match_pct_p50": 0.62}

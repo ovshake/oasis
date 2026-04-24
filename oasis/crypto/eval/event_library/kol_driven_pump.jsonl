@@ -1,0 +1,1 @@
+{"event_type": "kol_driven_pump", "description": "KOL/influencer-driven pump (Elon tweet, CT shill)", "peak_pump_p10": 0.03, "peak_pump_p50": 0.10, "peak_pump_p90": 0.30, "pump_duration_p50_steps": 120, "fomo_agent_trade_rate_spike_p50": 4.0, "post_volume_spike_p50": 10.0, "reversal_within_4h_pct": 0.65}

@@ -1,0 +1,1 @@
+{"event_type": "macro_hawkish", "description": "Fed rate hike, hawkish FOMC, CPI surprise", "peak_drawdown_p10": -0.12, "peak_drawdown_p50": -0.05, "peak_drawdown_p90": -0.01, "recovery_half_life_p50_steps": 360, "vol_spike_ratio_p50": 2.0, "gold_crypto_corr_sign": "negative", "risk_off_sign_agreement_p50": 0.80}

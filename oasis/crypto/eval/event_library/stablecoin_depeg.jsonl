@@ -1,0 +1,1 @@
+{"event_type": "stablecoin_depeg", "description": "Stablecoin loses peg (USDT, UST-style)", "peak_drawdown_p10": -0.35, "peak_drawdown_p50": -0.15, "peak_drawdown_p90": -0.05, "recovery_half_life_p50_steps": 1440, "vol_spike_ratio_p50": 5.0, "post_volume_spike_p50": 8.0, "btc_eth_corr_during_event_p50": 0.85, "stablecoin_spread_bps_p50": 500}
