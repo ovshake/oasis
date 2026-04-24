@@ -1,0 +1,80 @@
+name: luna_depeg
+duration_steps: 2880
+step_minutes: 1
+seed: 42
+agents_count: 1000
+assets: [BTC, ETH, USDT, XAU, WTI, USD]
+price_source: historical
+as_of_date: "2022-05-07T00:00:00+00:00"
+llm_enabled: false
+output_dir: results/{name}/{timestamp}
+
+initial_prices:
+  USDT: 0.95
+
+population_mix:
+  lurker: 0.45
+  hodler: 0.15
+  paperhands: 0.15
+  fomo_degen: 0.08
+  ta: 0.05
+  contrarian: 0.03
+  news_trader: 0.04
+  whale: 0.01
+  kol: 0.02
+  market_maker: 0.02
+
+news_source:
+  kind: manual
+  enrich_with: mock
+
+manual_events:
+  - step: 0
+    title: "UST stablecoin loses peg, drops to $0.95"
+    content: >-
+      TerraUSD (UST) has depegged from $1.00, falling to $0.95. The Luna
+      Foundation Guard begins deploying Bitcoin reserves to defend the peg.
+      Markets are in a state of high alert.
+    sentiment: -0.8
+    assets: [USDT, BTC, ETH]
+    audience: all
+
+  - step: 360
+    title: "UST drops further to $0.80 as confidence erodes"
+    content: >-
+      Despite LFG intervention, UST continues to slide. Bitcoin selling
+      pressure intensifies as reserves are liquidated. Panic spreading
+      across all stablecoin markets. USDT briefly depegs to $0.995.
+    sentiment: -0.9
+    assets: [USDT, BTC, ETH]
+    audience: all
+
+  - step: 720
+    title: "Major exchanges halt LUNA/UST trading"
+    content: >-
+      Several exchanges have suspended LUNA and UST trading pairs. The
+      broader crypto market is in freefall. BTC drops below $30K. Tether
+      under scrutiny but holding closer to peg.
+    sentiment: -0.95
+    assets: [BTC, ETH, USDT]
+    audience: all
+
+  - step: 1440
+    title: "LUNA essentially worthless as death spiral completes"
+    content: >-
+      LUNA has lost 99.9% of its value. The algorithmic stablecoin
+      experiment is declared a failure. Contagion fears spread to Tether
+      and the broader DeFi ecosystem. Gold sees safe-haven flows.
+    sentiment: -0.7
+    assets: [BTC, ETH, USDT, XAU]
+    audience: all
+
+  - step: 2160
+    title: "Markets stabilize, Tether peg recovers"
+    content: >-
+      USDT has recovered its dollar peg after Tether confirmed reserves.
+      Bitcoin finding support around $29K. Market sentiment still fragile
+      but the worst of the contagion appears contained.
+    sentiment: 0.2
+    assets: [BTC, ETH, USDT]
+    audience: all

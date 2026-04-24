@@ -1,0 +1,46 @@
+name: kol_pump
+duration_steps: 240
+step_minutes: 1
+seed: 42
+agents_count: 100
+assets: [BTC, ETH, USDT, XAU, WTI, USD]
+price_source: default
+llm_enabled: false
+output_dir: results/{name}/{timestamp}
+
+population_mix:
+  lurker: 0.45
+  hodler: 0.15
+  paperhands: 0.15
+  fomo_degen: 0.08
+  ta: 0.05
+  contrarian: 0.03
+  news_trader: 0.04
+  whale: 0.01
+  kol: 0.02
+  market_maker: 0.02
+
+news_source:
+  kind: manual
+  enrich_with: mock
+
+manual_events:
+  - step: 30
+    title: "Major KOL announces massive BTC position"
+    content: >-
+      A top crypto influencer with 2M followers just announced they are
+      going all-in on Bitcoin, calling it the trade of the decade.
+      Community engagement is off the charts.
+    sentiment: 0.8
+    assets: [BTC]
+    audience: kols
+
+  - step: 50
+    title: "BTC rally gains mainstream attention"
+    content: >-
+      Following the KOL endorsement, Bitcoin is trending on social media.
+      Retail traders are piling in. FOMO is spreading across all channels.
+      Multiple influencers now echoing the bullish call.
+    sentiment: 0.6
+    assets: [BTC]
+    audience: all

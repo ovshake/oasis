@@ -1,0 +1,29 @@
+name: live_today
+duration_steps: 60
+step_minutes: 1
+seed: 42
+agents_count: 100
+assets: [BTC, ETH, USDT, XAU, WTI, USD]
+price_source: live
+llm_enabled: false
+output_dir: results/{name}/{timestamp}
+
+population_mix:
+  lurker: 0.45
+  hodler: 0.15
+  paperhands: 0.15
+  fomo_degen: 0.08
+  ta: 0.05
+  contrarian: 0.03
+  news_trader: 0.04
+  whale: 0.01
+  kol: 0.02
+  market_maker: 0.02
+
+news_source:
+  kind: live_snapshot
+  providers: [cryptopanic]
+  lookback_hours: 24
+  enrich_with: mock
+
+manual_events: []

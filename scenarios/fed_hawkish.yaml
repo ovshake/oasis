@@ -1,0 +1,36 @@
+name: fed_hawkish
+duration_steps: 240
+step_minutes: 1
+seed: 42
+agents_count: 100
+assets: [BTC, ETH, USDT, XAU, WTI, USD]
+price_source: default
+llm_enabled: false
+output_dir: results/{name}/{timestamp}
+
+population_mix:
+  lurker: 0.45
+  hodler: 0.15
+  paperhands: 0.15
+  fomo_degen: 0.08
+  ta: 0.05
+  contrarian: 0.03
+  news_trader: 0.04
+  whale: 0.01
+  kol: 0.02
+  market_maker: 0.02
+
+news_source:
+  kind: manual
+  enrich_with: mock
+
+manual_events:
+  - step: 50
+    title: "Fed raises interest rates by 75 basis points"
+    content: >-
+      The Federal Reserve announced a 75 basis point rate hike, the largest
+      since 1994. Chair Powell signaled more aggressive tightening ahead.
+      Risk assets across the board are selling off sharply.
+    sentiment: -0.7
+    assets: [BTC, ETH, XAU]
+    audience: all
