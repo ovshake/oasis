@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { useRunTelemetry } from "@/lib/useRunTelemetry";
 import { useRunStore } from "@/lib/runStore";
 import { SimMeta } from "@/components/run/SimMeta";
@@ -31,10 +32,38 @@ import { SocialFeed } from "@/components/run/SocialFeed";
  */
 export default function LiveRunPage() {
   const params = useParams();
+  const router = useRouter();
   const runId = params.id as string;
 
+  // Guard: if this run is already finished, redirect to /replay. The
+  // WebSocket backend only streams for `running` runs, so hitting the
+  // live view for a completed run would otherwise surface
+  // "WebSocket closed before connecting" which is confusing — the run
+  // succeeded, the live path is just wrong.
+  const [runStatusChecked, setRunStatusChecked] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await api.getRun(runId);
+        if (cancelled) return;
+        if (info.status && info.status !== "running") {
+          router.replace(`/run/${runId}/replay`);
+          return;
+        }
+      } catch {
+        // If the lookup fails, fall through and let useRunTelemetry's
+        // error state surface the issue.
+      }
+      if (!cancelled) setRunStatusChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, router]);
+
   const { steps, status, error, totalSteps, elapsedMs } =
-    useRunTelemetry(runId);
+    useRunTelemetry(runStatusChecked ? runId : "");
 
   const pushStep = useRunStore((s) => s.pushStep);
   const setStatus = useRunStore((s) => s.setStatus);
