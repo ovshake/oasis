@@ -3,16 +3,19 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #0a0e14;
-  --color-panel: #121823;
-  --color-border: #1e2838;
-  --color-text: #e4ecf7;
-  --color-dim: #7f8ea8;
+  /* DeSimulator palette — sourced from defily.ai. See lib/tokens.ts for
+     the canonical values; these duplicates exist because the SocialGraph
+     <canvas> context can't resolve Tailwind classes. */
+  --color-bg: #010110;
+  --color-panel: #0e0e33;
+  --color-border: #1a1a44;
+  --color-text: #ffffff;
+  --color-dim: #847e9c;
   --color-bullish: #00ff88;
   --color-bearish: #ff3355;
   --color-warn: #ffaa00;
-  --color-cyan: #00ddff;
-  --color-purple: #a855f7;
+  --color-cyan: #7a2ff4;     /* Defily signature purple (primary brand) */
+  --color-purple: #c84de8;   /* Defily magenta (secondary highlight) */
 }
 
 @layer base {
@@ -24,6 +27,14 @@
     font-size: 13px;
     line-height: 1.4;
   }
+  /* Subtle radial wash to warm the near-black bg — echoes Defily's
+     cosmic aesthetic without stealing attention from data panels. */
+  body {
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, rgba(122, 47, 244, 0.10), transparent 60%),
+      radial-gradient(800px 400px at 100% 100%, rgba(200, 77, 232, 0.06), transparent 60%);
+    background-attachment: fixed;
+  }
   /* Scrollbars styled to match terminal */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: theme("colors.bg"); }
@@ -33,7 +44,7 @@
 
 @layer components {
   .panel {
-    @apply bg-panel border border-border p-3;
+    @apply bg-panel border border-border p-3 rounded-sm;
   }
   .panel-title {
     @apply text-cyan text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2;
@@ -41,12 +52,18 @@
   .live-dot::before {
     content: "\25CF";
     @apply text-cyan inline-block mr-1;
-    text-shadow: 0 0 12px rgba(0,221,255,0.3);
+    text-shadow: 0 0 12px rgba(122, 47, 244, 0.55);
     animation: pulse 2s infinite;
   }
   .input-field {
     @apply bg-bg border border-border text-text text-[11px] px-2 py-1
            font-mono focus:border-cyan focus:outline-none transition-colors w-full;
+  }
+  /* Brand wordmark glow — used on "DeSimulator" in the TopBar. */
+  .brand-glow {
+    text-shadow:
+      0 0 12px rgba(122, 47, 244, 0.7),
+      0 0 24px rgba(122, 47, 244, 0.4);
   }
   @keyframes pulse {
     0%,100% { opacity: 1; } 50% { opacity: 0.4; }

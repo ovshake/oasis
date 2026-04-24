@@ -31,22 +31,23 @@ const ARCHETYPE_COLORS: Record<string, string> = {
 };
 
 // Resolved hex colors for canvas 2D context (CSS vars don't work in canvas).
+// Palette mirrors the DeSimulator/Defily tokens in lib/tokens.ts.
 const ARCHETYPE_HEX: Record<string, string> = {
-  lurker: "#7f8ea8",
-  hodler: "#00ff88",
-  paperhands: "#ff3355",
-  fomo_degen: "#ffaa00",
-  ta: "#00ddff",
-  contrarian: "#a855f7",
-  news_trader: "#e4ecf7",
-  whale: "#00ff88",
-  kol: "#a855f7",
-  market_maker: "#7f8ea8",
+  lurker:       "#847e9c", // Defily muted lavender
+  hodler:       "#00ff88",
+  paperhands:   "#ff3355",
+  fomo_degen:   "#ffaa00",
+  ta:           "#7a2ff4", // Defily primary purple
+  contrarian:   "#c84de8", // Defily magenta
+  news_trader:  "#ffffff",
+  whale:        "#00ff88",
+  kol:          "#c84de8",
+  market_maker: "#847e9c",
 };
 
-const EDGE_COLOR = "rgba(0, 221, 255, 0.12)";
-const GLOW_COLOR = "rgba(0, 221, 255, 0.5)";
-const DEFAULT_NODE_COLOR = "#7f8ea8";
+const EDGE_COLOR = "rgba(122, 47, 244, 0.18)";   // Defily purple tinted edges
+const GLOW_COLOR = "rgba(122, 47, 244, 0.65)";   // pulse ring purple
+const DEFAULT_NODE_COLOR = "#847e9c";
 
 interface GraphNode extends SimulationNodeDatum {
   user_id: number;
@@ -297,7 +298,7 @@ export function SocialGraph({
           const glowR = r + node.pulse * 8;
           ctx.beginPath();
           ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0, 221, 255, ${0.3 * node.pulse})`;
+          ctx.fillStyle = `rgba(122, 47, 244, ${0.4 * node.pulse})`;
           ctx.fill();
           // Decay pulse
           node.pulse *= 0.95;

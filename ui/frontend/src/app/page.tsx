@@ -54,10 +54,21 @@ export default async function HomePage() {
     <div className="p-4 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-sm font-bold tracking-wider">
-          <span className="text-cyan">OASIS</span>
-          <span className="text-dim mx-2">/</span>
-          <span className="text-text">CRYPTO NARRATIVE SIMULATOR</span>
+        <h1 className="text-sm font-bold tracking-wider flex items-baseline gap-2">
+          <span className="brand-glow text-cyan">DESIMULATOR</span>
+          <span className="text-dim mx-1">/</span>
+          <span className="text-text">NARRATIVE MARKET SIM</span>
+          <span className="text-dim text-[9px] uppercase tracking-widest ml-2">
+            by{" "}
+            <a
+              href="https://www.defily.ai/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-dim hover:text-cyan transition-colors"
+            >
+              Defily
+            </a>
+          </span>
         </h1>
         <Link
           href="/scenarios/new"

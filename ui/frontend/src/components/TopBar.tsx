@@ -38,16 +38,31 @@ export function TopBar() {
 
   return (
     <header className="flex items-center justify-between px-4 py-2 border-b border-border-bright bg-panel">
-      {/* Left: branding */}
-      <div className="flex items-center gap-2">
-        <span
-          className="text-cyan font-bold text-sm tracking-wider"
-          style={{ textShadow: "0 0 12px rgba(0,221,255,0.3)" }}
+      {/* Left: branding — DeSimulator wordmark with Defily purple glow */}
+      <div className="flex items-center gap-3">
+        <a
+          href="https://www.defily.ai/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 group"
         >
-          OASIS
-        </span>
-        <span className="text-dim text-[10px] uppercase tracking-widest">
-          Crypto Narrative Simulator
+          <span
+            aria-hidden="true"
+            className="inline-block w-2 h-2 rounded-full bg-cyan"
+            style={{
+              boxShadow:
+                "0 0 10px rgba(122,47,244,0.9), 0 0 24px rgba(122,47,244,0.45)",
+            }}
+          />
+          <span className="brand-glow text-cyan font-bold text-sm tracking-[0.18em]">
+            DeSimulator
+          </span>
+          <span className="text-dim text-[9px] uppercase tracking-widest transition-colors group-hover:text-text">
+            by Defily
+          </span>
+        </a>
+        <span className="hidden lg:inline text-dim text-[10px] uppercase tracking-widest border-l border-border pl-3">
+          Narrative Market Sim
         </span>
       </div>
 

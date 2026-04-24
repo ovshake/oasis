@@ -3,8 +3,8 @@ import "./globals.css";
 import { TopBar } from "@/components/TopBar";
 
 export const metadata: Metadata = {
-  title: "OASIS Crypto Sim",
-  description: "Cross-Asset Narrative Simulator",
+  title: "DeSimulator — Defily",
+  description: "Narrative-driven cross-asset market simulation, by Defily",
 };
 
 export default function RootLayout({
